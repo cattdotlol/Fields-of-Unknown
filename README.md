@@ -2,33 +2,24 @@
 
 [![build](https://github.com/cattdotlol/Fields-of-Unknown/actions/workflows/ci.yml/badge.svg)](https://github.com/cattdotlol/Fields-of-Unknown/actions/workflows/ci.yml)
 
-A feral cat wakes on a planet nobody charted, in an overgrown industrial
-sprawl that is half underwater and still raining.
+A cat wakes up on a planet nobody charted. It's flooded, overgrown, and
+still raining. Nothing explains anything to you.
 
-No tutorial, no markers, no quest log. Nothing tells you that you are
-hungry, or what the thing across the water is. You find out.
-
-C11 and [raylib](https://www.raylib.com/) 5.5.
-
-> Early days. World, weather, movement, food and something that hunts you
-> are in. No shelter, and dying costs nothing yet.
+C11 + [raylib](https://www.raylib.com/). Work in progress.
 
 ## Build
 
 ```sh
-sudo dnf install raylib-devel        # or: apt install libraylib-dev
+sudo dnf install raylib-devel      # apt: libraylib-dev
 make run
 ```
 
-Other targets: `release`, `test`, `windows` (needs `mingw64-gcc`),
-`dist`, `dist-windows`, `vars`.
+`make test` runs the tests. `make windows` cross-compiles (needs
+mingw64-gcc). `make dist` and `make dist-windows` package it up.
 
-Linux, macOS and Windows builds run on every push; see Actions for
-artifacts.
-
-Linux binaries do not travel between distributions — glibc versions only
-resolve forward. Build it where you intend to play it, or send someone
-`make dist-src`.
+If you're sending a build to someone, note that Linux binaries don't move
+between distros — glibc only resolves forward. Send them the source, or
+have CI build it.
 
 ## Controls
 
@@ -38,47 +29,23 @@ resolve forward. Build it where you intend to play it, or send someone
 | `Shift` | run |
 | `Ctrl` | sneak |
 | `Space` | jump |
+| `Down` (in water) | dive |
 | `E` | eat |
-| `Down` in water | dive |
-| `~` | dev menu (debug builds) |
-| `F1` `F5` | debug overlay, reroll world |
+| `Esc` | menu |
+| `~` | dev tools (debug builds only) |
 
-Rebindable in Settings → Controls.
+All rebindable in Settings → Controls.
 
-## Notes
+## A couple of things worth knowing
 
-The world is endless and stored nowhere: each chunk is a pure function of
-`(seed, index)`, so walking back returns you to the same place. Generation
-reads the cat's real jump reach and rejects anything it cannot cross.
+The world is infinite and isn't stored anywhere. Every chunk is a pure
+function of the seed and its index, so walking back gets you the same
+place you left. Generation checks the cat's actual jump reach and throws
+away anything it can't cross.
 
-It is divided into districts six chunks wide, so a city is somewhere you
-arrive at rather than a building that happens to be here. Cities have
-apartment blocks you can walk into and climb; the wild is hollow
-underneath, with caves reached through shafts in the ground; crash sites
-are strewn with hull plate off the ship.
-
-Rats hear rather than see. A sprint clears the street; a crouch gets you
-close. Rain masks noise but raises the water, which drowns the ground
-route and pushes you up onto the ledges.
-
-The sea under the flooded streets is modelled on a real one: light falls
-off exponentially with depth, so it has zones rather than a gradient;
-temperature drops through a thermocline; pressure crushes past 1500 units
-down. Air trapped under seamounts is the only way past the shelf and back,
-and hydrothermal vents are the one warm, lit thing on the floor.
-
-Trees grow recursively under botanical rules — da Vinci's branching law,
-apical dominance, gravitropism — so species are a pair of numbers rather
-than four hand-drawn shapes.
-
-Lights cast real shadows: every light rays past the corners of nearby
-solids, so a cave is lit by what you brought into it. The cat sees in the
-dark, apartment windows do not, and the thing hunting you glows.
-
-Something else hunts the same signal the rats run from. It is slower than
-a sprinting cat, will not cross water, and forgets you if it cannot find
-you — so noise is the whole conversation.
+Noise is most of the game. Rats run from it, and something else comes
+looking for it. Sprinting is loud, crouching isn't, and rain covers you.
 
 ## Licence
 
-Not yet decided.
+Haven't picked one yet.
