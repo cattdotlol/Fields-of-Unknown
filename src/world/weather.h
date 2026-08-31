@@ -1,0 +1,31 @@
+#ifndef WORLD_WEATHER_H
+#define WORLD_WEATHER_H
+
+/* Weather is the difficulty dial, not set dressing. Rain hides the cat's
+   scent and noise but raises the water and closes routes; dry weather
+   opens the map back up and leaves the cat trackable. */
+
+typedef enum WeatherState {
+    WEATHER_DRY = 0,
+    WEATHER_DRIZZLE,
+    WEATHER_RAIN,
+    WEATHER_STORM,
+    WEATHER_STATE_COUNT
+} WeatherState;
+
+void WeatherInit(unsigned int seed);
+void WeatherUpdate(float dt);
+
+float WeatherRain(void);        /* 0..1, smoothed */
+float WeatherWind(void);        /* -1..1 */
+float WeatherWetness(void);     /* 0..1, integrated rain; drives the water */
+float WeatherWaterY(void);      /* world y of the surface (smaller = higher) */
+
+/* 1 = fully covered, 0 = fully exposed. Stealth reads these. */
+float WeatherScentMask(void);
+float WeatherNoiseMask(void);
+
+WeatherState WeatherCurrent(void);
+const char  *WeatherName(void);
+
+#endif /* WORLD_WEATHER_H */
