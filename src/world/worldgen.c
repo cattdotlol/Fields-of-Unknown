@@ -1,5 +1,6 @@
 #include "world/worldgen.h"
 #include "entity/cat.h"
+#include "world/weather.h"
 
 #include <math.h>
 
@@ -121,17 +122,69 @@ static bool Add(Chunk *c, Rectangle r)
     return true;
 }
 
-/* Mushrooms cluster: finding one should suggest looking around. */
-static void AddMushrooms(Chunk *c, Rand *rnd, float x, float baseY, int count)
+static bool RectsOverlap(Rectangle a, Rectangle b)
+{
+    return !(a.x + a.width <= b.x || b.x + b.width <= a.x ||
+             a.y + a.height <= b.y || b.y + b.height <= a.y);
+}
+
+/* Ledges and blocks are placed opportunistically, so they have to check
+   they are not growing through something already there.
+
+   The margin is horizontal only: padding vertically would make a block
+   overlap the very ground it is standing on, and every one of them was
+   being rejected for resting on a surface. */
+static bool AddIfClear(Chunk *c, Rectangle r, float margin)
+{
+    Rectangle padded = { r.x - margin, r.y, r.width + margin * 2.0f, r.height };
+
+    for (int i = 0; i < c->solidCount; i++)
+    {
+        if (RectsOverlap(padded, c->solids[i])) return false;
+    }
+
+    return Add(c, r);
+}
+
+/* Top face of the highest solid standing under x, or -1 if nothing is.
+   `minThickness` keeps trees off 16-unit pipes. The inset stops props
+   from perching on the very lip of a ledge. */
+static float SupportTopAt(const Chunk *c, float x, float minThickness)
+{
+    float best = -1.0f;
+
+    for (int i = 0; i < c->solidCount; i++)
+    {
+        Rectangle r = c->solids[i];
+
+        if (r.height < minThickness) continue;
+        if (x < r.x + 8.0f || x > r.x + r.width - 8.0f) continue;
+
+        if (best < 0.0f || r.y < best) best = r.y;
+    }
+
+    return best;
+}
+
+/* Mushrooms cluster: finding one should suggest looking around. The
+   position is snapped to whatever is actually underneath, and skipped
+   entirely if that is nothing - which is how they used to end up
+   standing on open water. */
+static void AddMushrooms(Chunk *c, Rand *rnd, float x, int count)
 {
     for (int i = 0; i < count; i++)
     {
         if (c->mushroomCount >= CHUNK_MAX_MUSHROOMS) return;
 
+        float mx = x + RandRange(rnd, -46.0f, 46.0f);
+        float support = SupportTopAt(c, mx, 40.0f);
+
+        if (support < 0.0f) continue;
+
         Mushroom *m = &c->mushrooms[c->mushroomCount++];
 
-        m->x = x + RandRange(rnd, -46.0f, 46.0f);
-        m->baseY = baseY;
+        m->x = mx;
+        m->baseY = support;
         m->variant = (unsigned int)(RandNext(rnd) * 4096.0f);
 
         /* The nourishing ones are common, the poisonous ones are not -
@@ -146,14 +199,18 @@ static void AddMushrooms(Chunk *c, Rand *rnd, float x, float baseY, int count)
     }
 }
 
-static void AddTree(Chunk *c, Rand *rnd, float x, float baseY)
+/* Trees want proper ground, not a pipe. */
+static void AddTree(Chunk *c, Rand *rnd, float x)
 {
     if (c->treeCount >= CHUNK_MAX_TREES) return;
+
+    float support = SupportTopAt(c, x, 100.0f);
+    if (support < 0.0f) return;
 
     Tree *t = &c->trees[c->treeCount++];
 
     t->x = x;
-    t->baseY = baseY;
+    t->baseY = support;
     t->height = RandRange(rnd, 90.0f, 210.0f);
     t->spread = RandRange(rnd, 26.0f, 58.0f);
     t->variant = (unsigned int)(RandNext(rnd) * 4096.0f);
@@ -172,11 +229,15 @@ static void LedgeChain(Chunk *c, Rand *rnd, float x, float baseTop, int links)
         if (top < 220.0f) return;
 
         float width = RandRange(rnd, 90.0f, 165.0f);
-        if (!Add(c, (Rectangle){ x, top, width, LEDGE_THICK })) return;
+        if (!AddIfClear(c, (Rectangle){ x, top, width, LEDGE_THICK }, 6.0f)) return;
 
         x += RandRange(rnd, width * 0.55f, width + StepAcross() * 0.55f);
     }
 }
+
+typedef struct Seg {
+    float x, w, top;
+} Seg;
 
 static void BuildOnce(int index, unsigned int salt, Chunk *out)
 {
@@ -186,88 +247,166 @@ static void BuildOnce(int index, unsigned int salt, Chunk *out)
     out->mushroomCount = 0;
 
     float x0 = (float)index * CHUNK_WIDTH;
+    float endX = x0 + CHUNK_WIDTH - CHUNK_EDGE_WIDTH;
     float leftTop  = WorldEdgeHeight(index);
     float rightTop = WorldEdgeHeight(index + 1);
 
     Rand rnd = RandSeed(sSeed ^ salt, (unsigned int)(index * 2654435761u));
 
-    /* Index 0 and 1 must be the edge slabs: traversal starts and ends
+    Seg segs[20];
+    int segCount = 0;
+
+    /* solids[0] and [1] are the edge slabs: traversal starts and ends
        there, and neighbours butt against them. */
     Add(out, (Rectangle){ x0, leftTop, CHUNK_EDGE_WIDTH, GROUND_DEPTH });
-    Add(out, (Rectangle){ x0 + CHUNK_WIDTH - CHUNK_EDGE_WIDTH, rightTop,
-                          CHUNK_EDGE_WIDTH, GROUND_DEPTH });
+    Add(out, (Rectangle){ endX, rightTop, CHUNK_EDGE_WIDTH, GROUND_DEPTH });
 
-    AddTree(out, &rnd, x0 + RandRange(&rnd, 20.0f, CHUNK_EDGE_WIDTH - 20.0f), leftTop);
+    segs[segCount++] = (Seg){ x0, CHUNK_EDGE_WIDTH, leftTop };
+    segs[segCount++] = (Seg){ endX, CHUNK_EDGE_WIDTH, rightTop };
 
-    /* Interior: segments and channels between the two edges. */
+    /* --- ground -------------------------------------------------------
+       Segment first, flush against the left edge slab, so a seam is
+       always somewhere to land rather than a hole to fall through. */
     float x = x0 + CHUNK_EDGE_WIDTH;
-    float endX = x0 + CHUNK_WIDTH - CHUNK_EDGE_WIDTH;
     float top = leftTop;
 
-    while (x < endX - 40.0f)
+    while (x < endX - 110.0f && segCount < 18)
     {
-        bool wide = (RandNext(&rnd) < 0.24f);
-        float gap = wide ? RandRange(&rnd, 170.0f, 260.0f)
-                         : RandRange(&rnd, 70.0f, StepAcross() * 0.92f);
-
-        if (wide)
-        {
-            /* A real swim, but always bridged within reach of both banks. */
-            float bridgeTop = top - StepUp() * 0.85f;
-            Add(out, (Rectangle){ x - 60.0f, bridgeTop, gap + 120.0f, LEDGE_THICK });
-        }
-
-        x += gap;
-        if (x >= endX - 40.0f) break;
-
-        float segment = RandRange(&rnd, 150.0f, 380.0f);
-        if (x + segment > endX) segment = endX - x;
-        if (segment < 60.0f) break;
+        float w = RandRange(&rnd, 200.0f, 420.0f);
+        if (x + w > endX) w = endX - x;
+        if (w < 110.0f) break;
 
         top += RandRange(&rnd, -26.0f, 26.0f);
         if (top < GROUND_TOP_HIGH) top = GROUND_TOP_HIGH;
         if (top > GROUND_TOP_LOW)  top = GROUND_TOP_LOW;
 
-        if (!Add(out, (Rectangle){ x, top, segment, GROUND_DEPTH })) break;
+        if (!Add(out, (Rectangle){ x, top, w, GROUND_DEPTH })) break;
+        segs[segCount++] = (Seg){ x, w, top };
 
-        if (RandNext(&rnd) < 0.45f)
-        {
-            float tx = x + segment * 0.5f;
-            AddTree(out, &rnd, tx, top);
+        x += w;
+        if (x >= endX - 110.0f) break;
 
-            /* They grow in the damp round the base of things. */
-            if (RandNext(&rnd) < 0.55f)
-            {
-                AddMushrooms(out, &rnd, tx, top, 1 + (int)(RandNext(&rnd) * 3.0f));
-            }
-        }
-        else if (RandNext(&rnd) < 0.30f)
-        {
-            AddMushrooms(out, &rnd, x + segment * RandNext(&rnd), top,
-                         1 + (int)(RandNext(&rnd) * 2.0f));
-        }
+        bool wide = (RandNext(&rnd) < 0.24f);
+        float gap = wide ? RandRange(&rnd, 170.0f, 250.0f)
+                         : RandRange(&rnd, 70.0f, StepAcross() * 0.92f);
 
-        if (RandNext(&rnd) < 0.30f)
+        /* Do not open a channel we cannot then close before the edge. */
+        if (x + gap > endX - 110.0f) gap = RandRange(&rnd, 70.0f, 110.0f);
+
+        if (wide)
         {
-            float blockH = RandRange(&rnd, StepUp() * 0.55f, StepUp() * 0.9f);
-            Add(out, (Rectangle){ x + segment * 0.4f, top - blockH,
-                                  RandRange(&rnd, 50.0f, 90.0f), blockH });
+            AddIfClear(out, (Rectangle){ x - 50.0f, top - StepUp() * 0.85f,
+                                         gap + 100.0f, LEDGE_THICK }, 6.0f);
         }
 
-        if (RandNext(&rnd) < 0.5f)
-        {
-            LedgeChain(out, &rnd, x + RandRange(&rnd, 20.0f, segment * 0.6f), top, 2 + (int)(RandNext(&rnd) * 3.0f));
-        }
-
-        x += segment;
+        x += gap;
     }
 
-    /* Bridge whatever is left to the right-hand edge slab. */
     if (endX - x > StepAcross() * 0.9f)
     {
-        Add(out, (Rectangle){ x + 20.0f, rightTop - StepUp() * 0.8f,
-                              endX - x - 40.0f, LEDGE_THICK });
+        AddIfClear(out, (Rectangle){ x + 16.0f, rightTop - StepUp() * 0.8f,
+                                     endX - x - 32.0f, LEDGE_THICK }, 6.0f);
     }
+
+    /* --- the high route, and things to hop onto ---------------------- */
+    for (int i = 2; i < segCount; i++)
+    {
+        if (RandNext(&rnd) > 0.50f) continue;
+
+        LedgeChain(out, &rnd, segs[i].x + RandRange(&rnd, 20.0f, segs[i].w * 0.6f),
+                   segs[i].top, 2 + (int)(RandNext(&rnd) * 3.0f));
+    }
+
+    for (int i = 2; i < segCount; i++)
+    {
+        if (RandNext(&rnd) > 0.30f) continue;
+
+        float h = RandRange(&rnd, StepUp() * 0.55f, StepUp() * 0.9f);
+
+        AddIfClear(out, (Rectangle){ segs[i].x + segs[i].w * 0.4f, segs[i].top - h,
+                                     RandRange(&rnd, 50.0f, 90.0f), h }, 6.0f);
+    }
+
+    /* Every chunk needs somewhere above the flood line, or a wet season
+       turns it into a wall. If nothing landed, insist on one. */
+    bool hasLedge = false;
+    for (int i = 0; i < out->solidCount; i++)
+    {
+        if (out->solids[i].height <= LEDGE_THICK + 1.0f) { hasLedge = true; break; }
+    }
+
+    if (!hasLedge)
+    {
+        for (int i = 2; i < segCount && !hasLedge; i++)
+        {
+            LedgeChain(out, &rnd, segs[i].x + segs[i].w * 0.3f, segs[i].top, 3);
+
+            for (int k = 0; k < out->solidCount; k++)
+            {
+                if (out->solids[k].height <= LEDGE_THICK + 1.0f) { hasLedge = true; break; }
+            }
+        }
+    }
+
+    /* --- props, last ---------------------------------------------------
+       Only once every solid exists can a prop know what is under it. */
+    for (int i = 0; i < segCount; i++)
+    {
+        float centre = segs[i].x + segs[i].w * 0.5f;
+        float spread = segs[i].w * 0.28f;
+
+        if (RandNext(&rnd) < 0.50f)
+        {
+            AddTree(out, &rnd, centre + RandRange(&rnd, -spread, spread));
+        }
+
+        if (RandNext(&rnd) < 0.50f)
+        {
+            AddMushrooms(out, &rnd, centre + RandRange(&rnd, -spread, spread),
+                         1 + (int)(RandNext(&rnd) * 3.0f));
+        }
+    }
+}
+
+bool WorldChunkValid(const Chunk *chunk)
+{
+    for (int a = 0; a < chunk->solidCount; a++)
+    {
+        for (int b = a + 1; b < chunk->solidCount; b++)
+        {
+            if (RectsOverlap(chunk->solids[a], chunk->solids[b])) return false;
+        }
+    }
+
+    for (int i = 0; i < chunk->mushroomCount; i++)
+    {
+        if (SupportTopAt(chunk, chunk->mushrooms[i].x, 40.0f) != chunk->mushrooms[i].baseY)
+        {
+            return false;
+        }
+    }
+
+    for (int i = 0; i < chunk->treeCount; i++)
+    {
+        if (SupportTopAt(chunk, chunk->trees[i].x, 100.0f) != chunk->trees[i].baseY)
+        {
+            return false;
+        }
+    }
+
+    /* Somewhere to stand when the flood is at its worst. Without this a
+       wet season turns the odd chunk into a wall. */
+    float dryLine = WeatherMaxWaterY() - 4.0f;
+    bool hasDryGround = false;
+
+    for (int i = 0; i < chunk->solidCount; i++)
+    {
+        if (chunk->solids[i].y < dryLine) { hasDryGround = true; break; }
+    }
+
+    if (!hasDryGround) return false;
+
+    return WorldChunkTraversable(chunk);
 }
 
 void WorldBuildChunk(int index, Chunk *out)
@@ -276,7 +415,7 @@ void WorldBuildChunk(int index, Chunk *out)
     {
         BuildOnce(index, attempt * 7919u, out);
 
-        if (WorldChunkTraversable(out))
+        if (WorldChunkValid(out))
         {
             out->active = true;
             return;
@@ -295,7 +434,11 @@ void WorldBuildChunk(int index, Chunk *out)
     Add(out, (Rectangle){ x0, top, CHUNK_EDGE_WIDTH, GROUND_DEPTH });
     Add(out, (Rectangle){ x0 + CHUNK_WIDTH - CHUNK_EDGE_WIDTH, WorldEdgeHeight(index + 1),
                           CHUNK_EDGE_WIDTH, GROUND_DEPTH });
-    Add(out, (Rectangle){ x0, top, CHUNK_WIDTH, GROUND_DEPTH });
+
+    /* Fills the middle only - spanning the whole chunk would lay this
+       straight through both edge slabs. */
+    Add(out, (Rectangle){ x0 + CHUNK_EDGE_WIDTH, top,
+                          CHUNK_WIDTH - CHUNK_EDGE_WIDTH * 2.0f, GROUND_DEPTH });
 
     out->active = true;
 }

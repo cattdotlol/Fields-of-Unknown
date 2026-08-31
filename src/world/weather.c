@@ -162,6 +162,11 @@ float WeatherWaterY(void)
     return WATER_BASE_Y - sWetness * WATER_RISE;
 }
 
+float WeatherMaxWaterY(void)
+{
+    return WATER_BASE_Y - WATER_RISE;
+}
+
 /* Rain beats scent down fast; it takes a while to come back. */
 float WeatherScentMask(void)
 {

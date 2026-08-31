@@ -23,6 +23,10 @@ float WeatherWind(void);        /* -1..1 */
 float WeatherWetness(void);     /* 0..1, integrated rain; drives the water */
 float WeatherWaterY(void);      /* world y of the surface (smaller = higher) */
 
+/* Where the water tops out when everything is as wet as it gets. World
+   generation needs this to guarantee a dry route through every chunk. */
+float WeatherMaxWaterY(void);
+
 /* 1 = fully covered, 0 = fully exposed. Stealth reads these. */
 float WeatherScentMask(void);
 float WeatherNoiseMask(void);

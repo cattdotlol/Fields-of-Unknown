@@ -184,6 +184,100 @@ static void TestStreaming(void)
           TerrainCount() == a, true);
 }
 
+/* The three things that were actually wrong: mushrooms standing on open
+   water, solids growing through each other, and nothing checking either. */
+static void TestNothingFloatsOrOverlaps(void)
+{
+    puts("placement");
+
+    WorldSetSeed(20260831u);
+
+    int floatingShrooms = 0, floatingTrees = 0, overlaps = 0;
+    int shrooms = 0, trees = 0, invalid = 0;
+
+    for (int i = -300; i <= 300; i++)
+    {
+        Chunk c;
+        WorldBuildChunk(i, &c);
+
+        if (!WorldChunkValid(&c)) invalid++;
+
+        for (int m = 0; m < c.mushroomCount; m++)
+        {
+            shrooms++;
+            bool held = false;
+
+            for (int sIdx = 0; sIdx < c.solidCount; sIdx++)
+            {
+                Rectangle r = c.solids[sIdx];
+                if (c.mushrooms[m].x >= r.x && c.mushrooms[m].x <= r.x + r.width &&
+                    c.mushrooms[m].baseY == r.y) { held = true; break; }
+            }
+            if (!held) floatingShrooms++;
+        }
+
+        for (int t = 0; t < c.treeCount; t++)
+        {
+            trees++;
+            bool held = false;
+
+            for (int sIdx = 0; sIdx < c.solidCount; sIdx++)
+            {
+                Rectangle r = c.solids[sIdx];
+                if (c.trees[t].x >= r.x && c.trees[t].x <= r.x + r.width &&
+                    c.trees[t].baseY == r.y) { held = true; break; }
+            }
+            if (!held) floatingTrees++;
+        }
+
+        for (int a = 0; a < c.solidCount; a++)
+        {
+            for (int b = a + 1; b < c.solidCount; b++)
+            {
+                Rectangle p = c.solids[a], q = c.solids[b];
+                bool hit = !(p.x + p.width <= q.x || q.x + q.width <= p.x ||
+                             p.y + p.height <= q.y || q.y + q.height <= p.y);
+                if (hit) overlaps++;
+            }
+        }
+    }
+
+    printf("    %d mushrooms, %d trees over 601 chunks\n", shrooms, trees);
+
+    Check("no mushroom stands on open water", floatingShrooms == 0, true);
+    Check("no tree stands on open water", floatingTrees == 0, true);
+    Check("no solid grows through another", overlaps == 0, true);
+    Check("every generated chunk passes validation", invalid == 0, true);
+}
+
+/* Validation is only worth having if it actually rejects things. */
+static void TestValidationHasTeeth(void)
+{
+    Chunk c = { 0 };
+    c.solidCount = 3;
+    c.solids[0] = (Rectangle){    0, 560, 180, 280 };
+    c.solids[1] = (Rectangle){  240, 560, 180, 280 };
+    c.solids[2] = (Rectangle){   60, 420, 140,  16 };   /* above the flood */
+
+    Check("a clean chunk passes", WorldChunkValid(&c), true);
+
+    /* Nowhere above the waterline: a wet season would wall this off. */
+    c.solidCount = 2;
+    Check("a chunk with no dry ground is rejected", WorldChunkValid(&c), false);
+
+    c.solidCount = 4;
+    c.solids[3] = (Rectangle){  100, 500, 180, 280 };   /* through solid 0 */
+    Check("overlapping solids are rejected", WorldChunkValid(&c), false);
+
+    c.solidCount = 3;
+    c.mushroomCount = 1;
+    c.mushrooms[0] = (Mushroom){ .x = 210.0f, .baseY = 560.0f };  /* in the gap */
+    Check("a floating mushroom is rejected", WorldChunkValid(&c), false);
+
+    c.mushrooms[0].x = 300.0f;                                    /* on solid 1 */
+    Check("a supported mushroom is accepted", WorldChunkValid(&c), true);
+}
+
 void SuiteWorldgen(void)
 {
     TestValidatorRejectsImpossible();
@@ -191,4 +285,6 @@ void SuiteWorldgen(void)
     TestSeamsLineUp();
     TestDeterminism();
     TestStreaming();
+    TestNothingFloatsOrOverlaps();
+    TestValidationHasTeeth();
 }

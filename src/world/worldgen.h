@@ -57,6 +57,11 @@ void  WorldBuildChunk(int index, Chunk *out);
 /* Left edge to right edge, given the cat's reach. Exposed for tests. */
 bool  WorldChunkTraversable(const Chunk *chunk);
 
+/* Everything a finished chunk must satisfy: crossable, no solid growing
+   through another, and nothing standing on thin air. A candidate that
+   fails any of these is thrown away and rerolled. */
+bool  WorldChunkValid(const Chunk *chunk);
+
 Vector2 WorldSpawnPoint(void);
 
 #endif /* WORLD_WORLDGEN_H */
