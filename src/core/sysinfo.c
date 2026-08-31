@@ -2,6 +2,13 @@
 
 #include "raylib.h"
 
+/* windows.h must come first: GL/gl.h on Windows uses APIENTRY and
+   WINGDIAPI from it and will not compile on its own. */
+#if defined(_WIN32)
+    #define WIN32_LEAN_AND_MEAN
+    #include <windows.h>
+#endif
+
 #include <GL/gl.h>
 
 #include <stdio.h>
@@ -32,7 +39,48 @@ static void Trim(char *s)
     if (lead > 0) memmove(s, s + lead, strlen(s + lead) + 1);
 }
 
-#if defined(__linux__)
+#if defined(_WIN32)
+
+static void ReadCpu(void)
+{
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    gSysInfo.cpuThreads = (int)info.dwNumberOfProcessors;
+
+    /* The friendly CPU name only exists in the registry. */
+    HKEY key;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE,
+                      "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+                      0, KEY_READ, &key) == ERROR_SUCCESS)
+    {
+        DWORD size = (DWORD)sizeof(gSysInfo.cpu);
+        DWORD type = 0;
+
+        if (RegQueryValueExA(key, "ProcessorNameString", NULL, &type,
+                             (LPBYTE)gSysInfo.cpu, &size) == ERROR_SUCCESS &&
+            type == REG_SZ)
+        {
+            gSysInfo.cpu[sizeof(gSysInfo.cpu) - 1] = '\0';
+            Trim(gSysInfo.cpu);
+        }
+
+        RegCloseKey(key);
+    }
+}
+
+static void ReadMemory(void)
+{
+    MEMORYSTATUSEX status;
+    status.dwLength = sizeof(status);
+
+    if (GlobalMemoryStatusEx(&status))
+    {
+        snprintf(gSysInfo.memory, sizeof(gSysInfo.memory), "%.1f GB",
+                 (double)status.ullTotalPhys / (1024.0 * 1024.0 * 1024.0));
+    }
+}
+
+#elif defined(__linux__)
 static void ReadCpu(void)
 {
     FILE *f = fopen("/proc/cpuinfo", "r");
@@ -73,7 +121,7 @@ static void ReadMemory(void)
 
     if (kb > 0) snprintf(gSysInfo.memory, sizeof(gSysInfo.memory), "%.1f GB", kb / 1048576.0);
 }
-#endif /* __linux__ */
+#endif /* platform */
 
 void SysInfoRefreshDisplay(void)
 {
@@ -91,7 +139,7 @@ void SysInfoGather(void)
     CopyInto(gSysInfo.cpu, sizeof(gSysInfo.cpu), NULL, "unknown");
     CopyInto(gSysInfo.memory, sizeof(gSysInfo.memory), NULL, "unknown");
 
-#if defined(__linux__)
+#if defined(_WIN32) || defined(__linux__)
     gSysInfo.cpu[0] = '\0';
     gSysInfo.cpuThreads = 0;
     ReadCpu();

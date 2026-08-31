@@ -48,6 +48,52 @@ test:
 	$(CC) $(CFLAGS) -g -O0 -o $(BUILD)/tests/run $(TEST_SRCS) $(LDLIBS)
 	@./$(BUILD)/tests/run
 
+# --- windows cross build -----------------------------------------------
+# Needs: sudo dnf install mingw64-gcc
+# raylib is not packaged for mingw, so it is built from source into
+# vendor/ the first time.
+MINGW_CC   := x86_64-w64-mingw32-gcc
+MINGW_AR   := x86_64-w64-mingw32-ar
+WIN_RAYLIB := vendor/raylib-win/src/libraylib.a
+WIN_OUT    := $(BUILD)/win
+
+$(WIN_RAYLIB):
+	@command -v $(MINGW_CC) >/dev/null || { \
+	  echo; echo "  mingw is not installed. run:"; \
+	  echo "      sudo dnf install mingw64-gcc"; echo; exit 1; }
+	@test -d vendor/raylib-win || \
+	  git clone --depth 1 --branch 5.5 https://github.com/raysan5/raylib.git vendor/raylib-win
+	$(MAKE) -C vendor/raylib-win/src PLATFORM=PLATFORM_DESKTOP OS=WINDOWS \
+	  CC=$(MINGW_CC) AR=$(MINGW_AR) RAYLIB_LIBTYPE=STATIC
+
+# -static pulls libgcc and winpthread in, so the result is one .exe with
+# no runtime DLLs to chase.
+windows: $(WIN_RAYLIB)
+	@mkdir -p $(WIN_OUT)
+	$(MINGW_CC) -std=c11 -Wall -Wextra -O2 -DNDEBUG -I$(SRCDIR) \
+	  -Ivendor/raylib-win/src \
+	  -o $(WIN_OUT)/FieldsOfUnknown.exe $(SRCS) \
+	  $(WIN_RAYLIB) -lopengl32 -lgdi32 -lwinmm -ladvapi32 \
+	  -static -static-libgcc -lm
+	@cp -r assets $(WIN_OUT)/
+	@echo
+	@echo "  $(WIN_OUT)/FieldsOfUnknown.exe"
+	@echo
+
+WINPKG := fields-of-unknown-$(VERSION)-windows-x64
+
+dist-windows: windows
+	@rm -rf $(DIST)/$(WINPKG) $(DIST)/$(WINPKG).zip
+	@mkdir -p $(DIST)/$(WINPKG)
+	@cp $(WIN_OUT)/FieldsOfUnknown.exe $(DIST)/$(WINPKG)/
+	@cp -r assets $(DIST)/$(WINPKG)/
+	@printf 'FIELDS OF UNKNOWN\r\n\r\nRun FieldsOfUnknown.exe\r\n\r\nKeep the assets folder next to it.\r\n' \
+	  > $(DIST)/$(WINPKG)/README.txt
+	@cd $(DIST) && zip -qr $(WINPKG).zip $(WINPKG)
+	@echo
+	@echo "  $(DIST)/$(WINPKG).zip"
+	@echo
+
 VERSION ?= 0.1.0
 SRCPKG  := fields-of-unknown-$(VERSION)-src
 PKG     := fields-of-unknown-$(VERSION)-linux-x86_64
@@ -87,4 +133,4 @@ clean:
 
 -include $(DEPS)
 
-.PHONY: debug asan release run test dist dist-src clean
+.PHONY: debug asan release run test dist dist-src windows dist-windows clean
