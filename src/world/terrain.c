@@ -3,6 +3,7 @@
 #include "world/worldgen.h"
 #include "world/season.h"
 #include "world/mushroom.h"
+#include "world/worldgen.h"
 
 #include <math.h>
 
@@ -13,6 +14,7 @@ static bool  sPrimed;
 /* Flattened solids, rebuilt only when the window moves. Physics walks
    this every tick, so it should not chase chunk structs. */
 static Rectangle sFlat[TERRAIN_LOADED_CHUNKS * CHUNK_MAX_SOLIDS];
+static unsigned char sFlatKind[TERRAIN_LOADED_CHUNKS * CHUNK_MAX_SOLIDS];
 static int sFlatCount;
 
 static void Flatten(void)
@@ -25,6 +27,7 @@ static void Flatten(void)
 
         for (int i = 0; i < sChunks[c].solidCount; i++)
         {
+            sFlatKind[sFlatCount] = sChunks[c].kinds[i];
             sFlat[sFlatCount++] = sChunks[c].solids[i];
         }
     }
@@ -75,6 +78,11 @@ int TerrainCount(void)
 Rectangle TerrainSolid(int index)
 {
     return sFlat[index];
+}
+
+int TerrainSolidKind(int index)
+{
+    return (int)sFlatKind[index];
 }
 
 bool TerrainOverlaps(Rectangle box)
@@ -252,14 +260,67 @@ void TerrainDraw(float left, float right, Rectangle focus)
         Rectangle r = sFlat[i];
         if (r.x + r.width < left || r.x > right) continue;
 
-        DrawRectangleRec(r, body);
-        DrawRectangle((int)r.x, (int)r.y, (int)r.width, 3, lip);
-
-        for (float x = r.x + 4.0f; x < r.x + r.width - 4.0f; x += 17.0f)
+        switch (sFlatKind[i])
         {
-            if (sinf(x * 0.37f) < 0.35f) continue;
+            case SOLID_WALL:
+            {
+                /* Rendered brick with windows, so a block reads as
+                   somewhere that was lived in. */
+                DrawRectangleRec(r, (Color){ 46, 42, 44, 255 });
+                DrawRectangle((int)r.x, (int)r.y, (int)r.width, 2,
+                              (Color){ 66, 60, 62, 255 });
 
-            DrawRectangle((int)x, (int)(r.y - 3.0f), 3, 3, moss);
+                for (float wy = r.y + 26.0f; wy < r.y + r.height - 24.0f; wy += 80.0f)
+                {
+                    bool lit = (sinf(wy * 0.21f + r.x * 0.07f) > 0.55f);
+
+                    DrawRectangle((int)(r.x + 3.0f), (int)wy, 8, 14,
+                                  lit ? (Color){ 156, 122, 64, 255 }
+                                      : (Color){ 18, 20, 26, 255 });
+                }
+                break;
+            }
+
+            case SOLID_FLOOR:
+                DrawRectangleRec(r, (Color){ 38, 35, 38, 255 });
+                DrawRectangle((int)r.x, (int)r.y, (int)r.width, 2,
+                              (Color){ 60, 56, 58, 255 });
+                break;
+
+            case SOLID_ROOF:
+                DrawRectangleRec(r, (Color){ 28, 26, 30, 255 });
+                DrawRectangle((int)r.x, (int)r.y, (int)r.width, 2,
+                              (Color){ 52, 48, 52, 255 });
+                break;
+
+            case SOLID_DEBRIS:
+                /* Hull plate: cold metal with a scorched edge. */
+                DrawRectangleRec(r, (Color){ 44, 48, 56, 255 });
+                DrawRectangle((int)r.x, (int)r.y, (int)r.width, 2,
+                              (Color){ 78, 84, 94, 255 });
+                DrawRectangle((int)r.x, (int)(r.y + r.height - 3.0f),
+                              (int)r.width, 3, (Color){ 30, 22, 20, 255 });
+                break;
+
+            case SOLID_ROCK:
+                DrawRectangleRec(r, (Color){ 32, 28, 26, 255 });
+                DrawRectangle((int)r.x, (int)r.y, (int)r.width, 2,
+                              (Color){ 50, 44, 40, 255 });
+                break;
+
+            case SOLID_GROUND:
+            case SOLID_LEDGE:
+            default:
+                DrawRectangleRec(r, body);
+                DrawRectangle((int)r.x, (int)r.y, (int)r.width, 3, lip);
+
+                for (float x = r.x + 4.0f; x < r.x + r.width - 4.0f; x += 17.0f)
+                {
+                    if (sinf(x * 0.37f) < 0.35f) continue;
+
+                    DrawRectangle((int)x, (int)(r.y - 3.0f), 3, 3, moss);
+                }
+                break;
         }
     }
 

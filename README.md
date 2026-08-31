@@ -49,6 +49,12 @@ The world is endless and stored nowhere: each chunk is a pure function of
 `(seed, index)`, so walking back returns you to the same place. Generation
 reads the cat's real jump reach and rejects anything it cannot cross.
 
+It is divided into districts six chunks wide, so a city is somewhere you
+arrive at rather than a building that happens to be here. Cities have
+apartment blocks you can walk into and climb; the wild is hollow
+underneath, with caves reached through shafts in the ground; crash sites
+are strewn with hull plate off the ship.
+
 Rats hear rather than see. A sprint clears the street; a crouch gets you
 close. Rain masks noise but raises the water, which drowns the ground
 route and pushes you up onto the ledges.

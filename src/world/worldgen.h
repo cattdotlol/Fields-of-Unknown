@@ -16,8 +16,39 @@
 
 #define CHUNK_WIDTH       1024.0f
 #define CHUNK_EDGE_WIDTH   180.0f   /* flat landing either side of a seam */
-#define CHUNK_MAX_SOLIDS      44
+#define CHUNK_MAX_SOLIDS      72
 #define CHUNK_MAX_TREES        6
+
+/* --- districts ---------------------------------------------------------
+   The world used to be one texture repeated forever: trees, mushrooms and
+   ledges everywhere in the same proportions. Districts give it regions
+   several chunks wide, so a city is a place you arrive at rather than a
+   building that happens to be here. */
+
+#define DISTRICT_CHUNKS 6           /* chunks per district */
+
+typedef enum District {
+    DISTRICT_SPRAWL = 0,   /* broken ruins, the default              */
+    DISTRICT_CITY,         /* apartment blocks you can go inside     */
+    DISTRICT_WILD,         /* overgrown, and hollow underneath       */
+    DISTRICT_CRASH,        /* where the rest of the ship came down   */
+    DISTRICT_COUNT
+} District;
+
+District    WorldDistrictAt(int chunkIndex);
+const char *WorldDistrictName(District district);
+
+/* What a solid is, so terrain can draw a wall differently from a rock. */
+typedef enum SolidKind {
+    SOLID_GROUND = 0,
+    SOLID_LEDGE,
+    SOLID_WALL,        /* apartment exterior      */
+    SOLID_FLOOR,       /* apartment storey        */
+    SOLID_ROOF,
+    SOLID_DEBRIS,      /* ship wreckage           */
+    SOLID_ROCK,        /* cave crust and floor    */
+    SOLID_KIND_COUNT
+} SolidKind;
 #define CHUNK_MAX_MUSHROOMS   10
 
 typedef struct Tree {
@@ -34,6 +65,7 @@ typedef struct Chunk {
     bool  active;
 
     Rectangle solids[CHUNK_MAX_SOLIDS];
+    unsigned char kinds[CHUNK_MAX_SOLIDS];
     int   solidCount;
 
     Tree  trees[CHUNK_MAX_TREES];

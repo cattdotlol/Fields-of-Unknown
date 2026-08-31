@@ -16,6 +16,7 @@ void TerrainStream(float centreX);
 
 int       TerrainCount(void);
 Rectangle TerrainSolid(int index);
+int       TerrainSolidKind(int index);
 bool      TerrainOverlaps(Rectangle box);
 
 int  TerrainLoadedChunks(void);

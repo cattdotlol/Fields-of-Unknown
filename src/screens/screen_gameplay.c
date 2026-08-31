@@ -225,8 +225,9 @@ static void DrawDebug(void)
                    (double)gVitals.health, (double)gVitals.hunger,
                    (double)gVitals.stamina, (double)gVitals.warmth),
         TextFormat("SEED     %u", WorldSeed()),
-        TextFormat("CHUNK    %d  [%d..%d]", (int)floorf(CatPosition().x / CHUNK_WIDTH),
-                   dbgFirst, dbgLast),
+        TextFormat("CHUNK    %d  [%d..%d]  %s", (int)floorf(CatPosition().x / CHUNK_WIDTH),
+                   dbgFirst, dbgLast,
+                   WorldDistrictName(WorldDistrictAt((int)floorf(CatPosition().x / CHUNK_WIDTH)))),
         TextFormat("SOLIDS   %d in %d chunks", TerrainCount(), TerrainLoadedChunks()),
         TextFormat("X        %.0f", (double)CatPosition().x),
     };
