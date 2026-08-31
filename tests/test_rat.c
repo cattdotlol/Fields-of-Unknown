@@ -143,10 +143,98 @@ static void TestCatching(void)
     }
 }
 
+/* Prey freezes before it runs, and that pause is the window the cat is
+   playing for - so it needs to actually happen. */
+static void TestFreezeBeforeFlight(void)
+{
+    Prepare();
+    Settle(60 * 40);
+
+    int subject = -1;
+    for (int i = 0; i < RAT_MAX; i++) if (RatActive(i)) { subject = i; break; }
+    if (subject < 0) { Check("a rat to startle", false, true); return; }
+
+    CatSpawn(RatPosition(subject));
+
+    bool froze = false, fled = false, frozeFirst = false;
+
+    for (int i = 0; i < 60 * 4; i++)
+    {
+        RatsFixedUpdate(TICK);
+
+        if (RatCurrentState(subject) == RAT_FREEZE) froze = true;
+        if (RatCurrentState(subject) == RAT_FLEE)
+        {
+            if (froze && !fled) frozeFirst = true;
+            fled = true;
+        }
+    }
+
+    Check("a startled rat freezes", froze, true);
+    Check("then bolts", fled, true);
+    Check("in that order", frozeFirst, true);
+}
+
+/* A group scatters; it does not stand watching one of its own run. */
+static void TestPanicSpreads(void)
+{
+    Prepare();
+    Settle(60 * 40);
+
+    int subject = -1;
+    for (int i = 0; i < RAT_MAX; i++) if (RatActive(i)) { subject = i; break; }
+    if (subject < 0) return;
+
+    CatSpawn(RatPosition(subject));
+
+    int peak = 0;
+    for (int i = 0; i < 60 * 5; i++)
+    {
+        RatsFixedUpdate(TICK);
+        if (RatAlarmed() > peak) peak = RatAlarmed();
+    }
+
+    printf("    %d rats bolted from one scare\n", peak);
+    Check("alarm spreads beyond the rat that heard it", peak > 1, true);
+}
+
+/* Individuals should not move as one organism. */
+static void TestTheyDifferFromEachOther(void)
+{
+    Prepare();
+    Settle(60 * 40);
+
+    float slowest = 1e9f, fastest = -1e9f;
+    int sampled = 0;
+
+    for (int t = 0; t < 120; t++)
+    {
+        RatsFixedUpdate(TICK);
+
+        for (int i = 0; i < RAT_MAX; i++)
+        {
+            if (!RatActive(i)) continue;
+
+            float v = fabsf(RatVelocityX(i));
+            if (v < 1.0f) continue;         /* ignore the ones sniffing */
+
+            if (v < slowest) slowest = v;
+            if (v > fastest) fastest = v;
+            sampled++;
+        }
+    }
+
+    Check("rats were moving to compare", sampled > 0, true);
+    Check("they do not all move at one speed", fastest - slowest > 10.0f, true);
+}
+
 void SuiteRat(void)
 {
     TestTheyAppearAndStandOnSomething();
     TestTheyStayNearTheCat();
     TestTheyNoticeTheCat();
     TestCatching();
+    TestFreezeBeforeFlight();
+    TestPanicSpreads();
+    TestTheyDifferFromEachOther();
 }

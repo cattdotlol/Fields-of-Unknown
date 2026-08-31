@@ -19,9 +19,10 @@
 #define RAT_TARGET 12
 
 typedef enum RatState {
-    RAT_WANDER = 0,
-    RAT_PAUSE,
-    RAT_FLEE
+    RAT_FORAGE = 0,   /* meandering, nose down                    */
+    RAT_FREEZE,       /* heard something and went stock still      */
+    RAT_FLEE,         /* bolting                                   */
+    RAT_WARY          /* recently spooked; jumpy and quick to bolt */
 } RatState;
 
 void RatsReset(void);
@@ -41,5 +42,6 @@ bool     RatActive(int index);
 Vector2  RatPosition(int index);
 RatState RatCurrentState(int index);
 float    RatAlertLevel(int index);
+float    RatVelocityX(int index);
 
 #endif /* ENTITY_RAT_H */
