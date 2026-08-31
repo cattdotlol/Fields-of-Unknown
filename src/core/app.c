@@ -5,6 +5,7 @@
 #include "core/settings.h"
 #include "core/sysinfo.h"
 #include "gfx/filmfx.h"
+#include "gfx/lighting.h"
 #include "gfx/scene_flood.h"
 #include "world/season.h"
 #include "world/weather.h"
@@ -83,6 +84,7 @@ void AppInit(void)
     SettingsApply();
 
     ThemeLoad();
+    LightingLoad();
     AudioLoad();
     CursorLoad();
     SysInfoGather();          /* needs the GL context InitWindow created */
@@ -194,6 +196,7 @@ void AppShutdown(void)
     SettingsSave(SETTINGS_FILE);
 
     AudioUnload();
+    LightingUnload();
     ThemeUnload();
     CloseAudioDevice();
     CloseWindow();

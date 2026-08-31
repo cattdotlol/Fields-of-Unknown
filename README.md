@@ -39,6 +39,8 @@ resolve forward. Build it where you intend to play it, or send someone
 | `Ctrl` | sneak |
 | `Space` | jump |
 | `E` | eat |
+| `Down` in water | dive |
+| `~` | dev menu (debug builds) |
 | `F1` `F5` | debug overlay, reroll world |
 
 Rebindable in Settings → Controls.
@@ -58,6 +60,10 @@ are strewn with hull plate off the ship.
 Rats hear rather than see. A sprint clears the street; a crouch gets you
 close. Rain masks noise but raises the water, which drowns the ground
 route and pushes you up onto the ledges.
+
+Lights cast real shadows: every light rays past the corners of nearby
+solids, so a cave is lit by what you brought into it. The cat sees in the
+dark, apartment windows do not, and the thing hunting you glows.
 
 Something else hunts the same signal the rats run from. It is slower than
 a sprinting cat, will not cross water, and forgets you if it cannot find

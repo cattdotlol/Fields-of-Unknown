@@ -13,6 +13,7 @@ bool DevGodMode(void) { return false; }
 bool DevFrozen(void) { return false; }
 bool DevShowHitboxes(void) { return false; }
 bool DevShowAI(void) { return false; }
+bool DevLighting(void) { return true; }
 
 #else
 
@@ -34,6 +35,7 @@ typedef enum Row {
     ROW_FREEZE,
     ROW_HITBOX,
     ROW_AI,
+    ROW_LIGHTS,
     ROW_WEATHER,
     ROW_SEASON,
     ROW_WATER,
@@ -51,11 +53,13 @@ static bool sGod;
 static bool sFrozen;
 static bool sHitboxes;
 static bool sAI;
+static bool sLights = true;
 
 bool DevGodMode(void)      { return sGod; }
 bool DevFrozen(void)       { return sFrozen; }
 bool DevShowHitboxes(void) { return sHitboxes; }
 bool DevShowAI(void)       { return sAI; }
+bool DevLighting(void)     { return sLights; }
 
 bool DevToolsOpen(void) { return sOpen; }
 
@@ -114,6 +118,7 @@ static void Activate(void)
         case ROW_FREEZE: sFrozen = !sFrozen; break;
         case ROW_HITBOX: sHitboxes = !sHitboxes; break;
         case ROW_AI:     sAI = !sAI; break;
+        case ROW_LIGHTS: sLights = !sLights; break;
 
         case ROW_HEAL:   VitalsReset(); break;
 
@@ -132,6 +137,7 @@ static const char *ValueFor(Row row)
         case ROW_FREEZE:  return sFrozen ? "ON" : "off";
         case ROW_HITBOX:  return sHitboxes ? "ON" : "off";
         case ROW_AI:      return sAI ? "ON" : "off";
+        case ROW_LIGHTS:  return sLights ? "ON" : "off";
         case ROW_WEATHER: return WEATHER_NAMES[WeatherCurrent()];
         case ROW_SEASON:  return SEASON_NAMES[SeasonCurrent()];
         case ROW_WATER:   return TextFormat("%.0f%%", (double)(WeatherWetness() * 100.0f));
@@ -142,7 +148,7 @@ static const char *ValueFor(Row row)
 }
 
 static const char *LABELS[ROW_COUNT] = {
-    "GOD MODE", "FREEZE WORLD", "HITBOXES", "SHOW AI",
+    "GOD MODE", "FREEZE WORLD", "HITBOXES", "SHOW AI", "LIGHTING",
     "WEATHER", "SEASON", "WATER LEVEL",
     "REFILL VITALS", "SPAWN RAT", "SPAWN STALKER", "WARP",
 };

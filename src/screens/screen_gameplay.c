@@ -10,6 +10,7 @@
 #include "entity/stalker.h"
 #include "entity/vitals.h"
 #include "gfx/filmfx.h"
+#include "gfx/lighting.h"
 #include "gfx/scene_flood.h"
 #include "ui/hud.h"
 #include "ui/theme.h"
@@ -280,6 +281,81 @@ static void DrawDebug(void)
     }
 }
 
+/* Anything solid overhead means the cat is inside or underground, which
+   is the whole reason caves and apartments should look different. */
+static bool UnderCover(void)
+{
+    Vector2 p = CatPosition();
+    Rectangle probe = { p.x - 5.0f, p.y - 300.0f, 10.0f, 250.0f };
+
+    return TerrainOverlaps(probe);
+}
+
+/* Lights the world, then multiplies the result over what was drawn. */
+static void ApplyLighting(void)
+{
+    if (!DevLighting()) return;
+
+    bool inside = UnderCover();
+
+    /* Storms darken the day; being under cover darkens it far more. */
+    float ambient = inside ? 0.16f : 0.46f;
+    ambient -= WeatherRain() * 0.10f;
+    ambient -= (1.0f - SeasonTemperature()) * 0.06f;
+
+    /* Lightning lights everything, briefly. */
+    ambient += WeatherFlash() * 0.45f;
+
+    if (ambient < 0.05f) ambient = 0.05f;
+
+    LightingBegin(ambient);
+
+    /* The cat sees in the dark; without this a cave is unplayable. */
+    Vector2 eye = CatRenderPosition(AppRenderAlpha());
+    eye.y -= 16.0f;
+
+    LightingAddLight(sCam, eye, inside ? 300.0f : 210.0f,
+                     (Color){ 214, 224, 210, 255 }, inside ? 0.70f : 0.34f);
+
+    Vector2 viewL = GetScreenToWorld2D((Vector2){ 0.0f, 0.0f }, sCam);
+    Vector2 viewR = GetScreenToWorld2D(
+        (Vector2){ (float)GetScreenWidth(), (float)GetScreenHeight() }, sCam);
+
+    int lit = 0;
+
+    for (int i = 0; i < TerrainCount() && lit < 8; i++)
+    {
+        if (TerrainSolidKind(i) != SOLID_WALL) continue;
+
+        Rectangle r = TerrainSolid(i);
+        if (r.x + r.width < viewL.x || r.x > viewR.x) continue;
+
+        /* Same rule the wall is drawn with, so the light sits on a window. */
+        for (float wy = r.y + 26.0f; wy < r.y + r.height - 24.0f && lit < 8; wy += 80.0f)
+        {
+            if (sinf(wy * 0.21f + r.x * 0.07f) <= 0.55f) continue;
+
+            LightingAddLight(sCam, (Vector2){ r.x + 7.0f, wy + 7.0f }, 190.0f,
+                             (Color){ 220, 170, 96, 255 }, 0.60f);
+            lit++;
+        }
+    }
+
+    /* And the thing that is looking for you. */
+    for (int i = 0; i < STALKER_MAX; i++)
+    {
+        if (!StalkerActive(i)) continue;
+
+        Vector2 p = StalkerPosition(i);
+        p.y -= 30.0f;
+
+        LightingAddLight(sCam, p, 150.0f, (Color){ 226, 132, 48, 255 },
+                         0.30f + StalkerInterest(i) * 0.45f);
+    }
+
+    LightingEnd();
+}
+
 static void Draw(void)
 {
     CameraApply();
@@ -338,6 +414,10 @@ static void Draw(void)
             }
         }
     EndMode2D();
+
+    /* Lighting goes on before the effects and the interface, so neither
+       gets dimmed by it. */
+    ApplyLighting();
 
     FilmVignette(0.6f);
 

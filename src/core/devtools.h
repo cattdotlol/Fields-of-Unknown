@@ -22,5 +22,6 @@ bool DevGodMode(void);
 bool DevFrozen(void);
 bool DevShowHitboxes(void);
 bool DevShowAI(void);
+bool DevLighting(void);
 
 #endif /* CORE_DEVTOOLS_H */

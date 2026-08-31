@@ -349,10 +349,32 @@ void CatDraw(float alpha)
                              : CAT_ART_BODY_COL;
 
     float eyes = (sCat.blinkFor > 0.0f) ? 0.0f : 1.0f;
-    float clip = sCat.swimming ? WeatherWaterY() : 0.0f;
+    /* Clip at the waterline only while floating on it. Once the cat is
+       fully under, clipping hid the whole animal - the water is drawn over
+       it afterwards anyway, which is what tints it. */
+    float clip = (sCat.swimming && !sCat.submerged) ? WeatherWaterY() : 0.0f;
 
     CatArtDrawFrame(CatArtSit, CAT_ART_W, CAT_ART_H,
                     at.x - bodyCol * cellW,
                     at.y - (float)CAT_ART_H * cellH + bob,
                     cellW, cellH, sCat.facing, eyes, 1.0f, clip);
+
+    /* Bubbles, so being under reads as being under. */
+    if (sCat.submerged)
+    {
+        float t = (float)GetTime();
+
+        for (int i = 0; i < 3; i++)
+        {
+            float phase = fmodf(t * 0.8f + (float)i * 0.37f, 1.0f);
+            float bx = at.x + sinf(t * 2.0f + (float)i * 2.1f) * 5.0f
+                            + sCat.facing * -8.0f;
+            float by = at.y - BodyHeight() - phase * 34.0f;
+
+            float side = (1.0f - phase * 0.6f) * 3.0f;
+
+            DrawRectangleRec((Rectangle){ bx, by, side, side },
+                             Fade((Color){ 196, 226, 236, 255 }, (1.0f - phase) * 0.55f));
+        }
+    }
 }
