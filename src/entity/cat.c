@@ -254,6 +254,13 @@ CatState CatCurrentState(void) { return sCat.state; }
 bool     CatIsSwimming(void)   { return sCat.swimming; }
 float    CatNoise(void)        { return sCat.noise; }
 
+void CatShove(float vx, float vy)
+{
+    sCat.body.vel.x = vx;
+    sCat.body.vel.y = vy;
+    sCat.body.grounded = false;
+}
+
 float CatMaxJumpHeight(void)
 {
     /* v^2 / 2g, with the jump held for its full arc. */

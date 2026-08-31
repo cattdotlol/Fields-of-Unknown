@@ -10,5 +10,6 @@ void SuiteVitals(void);
 void SuiteMushroom(void);
 void SuiteInput(void);
 void SuiteRat(void);
+void SuiteStalker(void);
 
 #endif /* TESTS_H */

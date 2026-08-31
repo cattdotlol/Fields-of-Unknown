@@ -1,6 +1,7 @@
 #include "core/audio.h"
 #include "core/settings.h"
 #include "ui/theme.h"
+#include "entity/stalker.h"
 #include "world/weather.h"
 
 #include "raylib.h"
@@ -25,6 +26,9 @@ static float sRainLevel;
 
 static Sound sThunder[THUNDER_VARIANTS];
 static bool  sThunderReady;
+
+static Sound sRoar;
+static bool  sRoarReady;
 
 static unsigned int sNoise = 0x9E3779B9u;
 
@@ -118,6 +122,11 @@ void AudioLoad(void)
     sThunder[1] = GenerateThunder(0.26f, 0.030f, 1.10f);
     sThunder[2] = GenerateThunder(0.08f, 0.016f, 0.72f);
     sThunderReady = true;
+
+    /* Lower and longer than thunder, with a slow throb rather than a
+       crack. Same technique: no second file to ship. */
+    sRoar = GenerateThunder(0.05f, 0.010f, 0.95f);
+    sRoarReady = true;
 }
 
 void AudioUnload(void)
@@ -128,6 +137,9 @@ void AudioUnload(void)
     {
         for (int i = 0; i < THUNDER_VARIANTS; i++) UnloadSound(sThunder[i]);
     }
+
+    if (sRoarReady) UnloadSound(sRoar);
+    sRoarReady = false;
 
     sRainReady = false;
     sThunderReady = false;
@@ -176,5 +188,15 @@ void AudioUpdate(void)
         SetSoundVolume(s, loudness * gSettings.sfxVolume);
         SetSoundPitch(s, 0.85f + loudness * 0.3f);
         PlaySound(s);
+    }
+
+    /* --- something has decided to come and find you ------------------- */
+    float roar = 0.0f;
+
+    if (sRoarReady && StalkerConsumeRoar(&roar))
+    {
+        SetSoundVolume(sRoar, (0.35f + roar * 0.65f) * gSettings.sfxVolume);
+        SetSoundPitch(sRoar, 0.55f + roar * 0.15f);   /* well below thunder */
+        PlaySound(sRoar);
     }
 }

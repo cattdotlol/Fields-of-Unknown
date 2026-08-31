@@ -8,8 +8,8 @@ hungry, or what the thing across the water is. You find out.
 
 C11 and [raylib](https://www.raylib.com/) 5.5.
 
-> Early days. World, weather, movement and food are in. Nothing hunts the
-> cat back yet.
+> Early days. World, weather, movement, food and something that hunts you
+> are in. No shelter, and dying costs nothing yet.
 
 ## Build
 
@@ -47,6 +47,10 @@ reads the cat's real jump reach and rejects anything it cannot cross.
 Rats hear rather than see. A sprint clears the street; a crouch gets you
 close. Rain masks noise but raises the water, which drowns the ground
 route and pushes you up onto the ledges.
+
+Something else hunts the same signal the rats run from. It is slower than
+a sprinting cat, will not cross water, and forgets you if it cannot find
+you — so noise is the whole conversation.
 
 ## Licence
 

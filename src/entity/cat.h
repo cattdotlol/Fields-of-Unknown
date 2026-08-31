@@ -35,6 +35,9 @@ float CatNoise(void);
 /* Derived from the movement constants. World generation reads these so a
    change to gravity or jump strength cannot silently produce a level the
    cat is unable to cross. */
+/* Knockback, for anything that hits the cat. */
+void CatShove(float vx, float vy);
+
 float CatMaxJumpHeight(void);
 float CatMaxRunJumpDistance(void);
 

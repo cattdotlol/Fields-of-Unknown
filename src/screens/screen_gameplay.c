@@ -5,6 +5,7 @@
 #include "core/input.h"
 #include "entity/cat.h"
 #include "entity/rat.h"
+#include "entity/stalker.h"
 #include "entity/vitals.h"
 #include "gfx/filmfx.h"
 #include "gfx/scene_flood.h"
@@ -27,16 +28,27 @@
 static Camera2D sCam;
 static bool     sDebug;
 
-static void Init(void)
+/* Everything a fresh run resets, in one place. Death, the debug reroll
+   and startup all go through here - they used to hand-roll the same
+   list, and every new system was another line to forget. */
+static void RestartRun(void)
 {
-    WorldSetSeed(WORLD_SEED);
     CatSpawn(WorldSpawnPoint());
     TerrainStream(CatPosition().x);
+
     VitalsReset();
     MushroomClearHarvests();
     RatsReset();
+    StalkersReset();
 
     sCam.target = CatPosition();
+}
+
+static void Init(void)
+{
+    WorldSetSeed(WORLD_SEED);
+    RestartRun();
+
     sCam.rotation = 0.0f;
     sDebug = false;
 }
@@ -70,6 +82,7 @@ static void FixedUpdate(float dt)
     VitalsUpdate(dt);
     MushroomTick(dt);
     RatsFixedUpdate(dt);
+    StalkersFixedUpdate(dt);
 
     /* Eating is the only way hunger goes back up. What a species does is
        not written down anywhere - you find out by trying it. */
@@ -97,18 +110,7 @@ static void FixedUpdate(float dt)
 
     /* Placeholder: back to the crash site. Dying should eventually cost
        something the player can feel. */
-    if (gVitals.dead)
-    {
-        CatSpawn(WorldSpawnPoint());
-        TerrainStream(CatPosition().x);
-        VitalsReset();
-        MushroomClearHarvests();
-        RatsReset();
-
-        /* Snap, do not lerp: without this the camera flies back across
-           however many thousand units you had walked. */
-        sCam.target = CatPosition();
-    }
+    if (gVitals.dead) RestartRun();
 }
 
 static void Update(float dt)
@@ -123,12 +125,7 @@ static void Update(float dt)
     if (IsKeyPressed(KEY_F5))
     {
         WorldSetSeed((unsigned int)GetTime() ^ (WorldSeed() * 2654435761u));
-        CatSpawn(WorldSpawnPoint());
-        TerrainStream(CatPosition().x);
-        VitalsReset();
-        MushroomClearHarvests();
-        RatsReset();
-        sCam.target = CatPosition();
+        RestartRun();
     }
     if (InputPressed(ACT_CANCEL)) AppGoTo(SCREEN_TITLE);
 }
@@ -167,6 +164,8 @@ static void DrawDebug(void)
         TextFormat("STATE    %s", StateName(CatCurrentState())),
         TextFormat("NOISE    %.2f", (double)CatNoise()),
         TextFormat("RATS     %d  (%d fleeing)", RatCount(), RatAlarmed()),
+        TextFormat("STALKERS %d  (%d hunting)  %.0f away", StalkerCount(),
+                   StalkerHunting(), (double)StalkerNearestDistance()),
         TextFormat("SCENT M. %.2f", (double)WeatherScentMask()),
         TextFormat("SEASON   %s %.0f%%  temp %.2f", SeasonName(),
                    (double)(SeasonProgress() * 100.0f), (double)SeasonTemperature()),
@@ -203,6 +202,7 @@ static void Draw(void)
     BeginMode2D(sCam);
         TerrainDraw(topLeft.x, botRight.x, CatBounds());
         RatsDraw(AppRenderAlpha(), topLeft.x, botRight.x);
+        StalkersDraw(AppRenderAlpha(), topLeft.x, botRight.x);
         CatDraw(AppRenderAlpha());
 
         /* Water last, so anything under it is tinted by it. */
