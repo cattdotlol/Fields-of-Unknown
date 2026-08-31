@@ -51,6 +51,7 @@ typedef enum SolidKind {
 } SolidKind;
 #define CHUNK_MAX_MUSHROOMS   10
 #define CHUNK_MAX_WEEDS       14
+#define CHUNK_MAX_DECOR       96
 
 typedef struct Tree {
     float x;            /* trunk centre, world space */
@@ -60,6 +61,28 @@ typedef struct Tree {
     unsigned int variant;
     bool  dead;         /* bare, no canopy */
 } Tree;
+
+/* Things that are drawn but not collided with. A building is mostly
+   this: you cannot walk through a window, but you do not stand on one
+   either, and without an opaque interior a block reads as scaffolding
+   with the sky behind it. */
+typedef enum DecorKind {
+    DECOR_ROOM = 0,      /* interior fill, drawn behind everything */
+    DECOR_PILLAR,
+    DECOR_WINDOW,
+    DECOR_WINDOW_LIT,
+    DECOR_PLINTH,
+    DECOR_RAILING,
+    DECOR_TANK,
+    DECOR_VENT,
+    DECOR_ANTENNA,
+    DECOR_KIND_COUNT
+} DecorKind;
+
+typedef struct Decor {
+    Rectangle rect;
+    unsigned char kind;
+} Decor;
 
 /* Grows on the ground and is only visible once the flood reaches it, so
    a wet season turns the streets into a seabed. */
@@ -86,6 +109,9 @@ typedef struct Chunk {
 
     Weed  weeds[CHUNK_MAX_WEEDS];
     int   weedCount;
+
+    Decor decor[CHUNK_MAX_DECOR];
+    int   decorCount;
 } Chunk;
 
 void  WorldSetSeed(unsigned int seed);

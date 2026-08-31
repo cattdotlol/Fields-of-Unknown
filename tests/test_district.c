@@ -155,9 +155,110 @@ static void TestCavesCanBeLeft(void)
     Check("and the chamber is taller than the cat", 76.0f > CAT_H, true);
 }
 
+/* The first version was two thin walls with slabs between them: you
+   could see the skyline straight through it. A building needs an inside. */
+static void TestBuildingsAreSolidObjects(void)
+{
+    WorldSetSeed(20260831u);
+
+    int roofs = 0, interiors = 0, windows = 0, pillars = 0;
+    int seeThrough = 0, escapes = 0;
+
+    for (int i = -300; i <= 300; i++)
+    {
+        Chunk c;
+        WorldBuildChunk(i, &c);
+
+        for (int r = 0; r < c.solidCount; r++)
+        {
+            if (c.kinds[r] != SOLID_ROOF) continue;
+
+            roofs++;
+
+            float bx = c.solids[r].x + 5.0f;
+            float bw = c.solids[r].width - 10.0f;
+
+            /* Something opaque has to cover the footprint. */
+            bool filled = false;
+
+            for (int d = 0; d < c.decorCount; d++)
+            {
+                if (c.decor[d].kind != DECOR_ROOM) continue;
+
+                Rectangle f = c.decor[d].rect;
+                if (f.x <= bx + 2.0f && f.x + f.width >= bx + bw - 2.0f) { filled = true; break; }
+            }
+
+            if (!filled) seeThrough++;
+        }
+
+        for (int d = 0; d < c.decorCount; d++)
+        {
+            if (c.decor[d].kind == DECOR_ROOM) interiors++;
+            if (c.decor[d].kind == DECOR_PILLAR) pillars++;
+            if (c.decor[d].kind == DECOR_WINDOW ||
+                c.decor[d].kind == DECOR_WINDOW_LIT) windows++;
+        }
+
+        for (int r = 0; r < c.solidCount; r++)
+        {
+            if (c.kinds[r] == SOLID_LEDGE && c.solids[r].height < 10.0f) escapes++;
+        }
+    }
+
+    printf("    %d buildings, %d interiors, %d windows, %d pillars, %d fire escapes\n",
+           roofs, interiors, windows, pillars, escapes);
+
+    Check("no building is see-through", seeThrough == 0, true);
+    Check("every building has an interior", interiors >= roofs, true);
+    Check("buildings have windows", windows > roofs * 3, true);
+    Check("wide buildings get structural bays", pillars > 0, true);
+    Check("some have fire escapes", escapes > 0, true);
+}
+
+/* A fire escape is only worth having if it can be climbed. */
+static void TestFireEscapesAreClimbable(void)
+{
+    WorldSetSeed(20260831u);
+
+    float worstRise = 0.0f;
+
+    for (int i = -200; i <= 200; i++)
+    {
+        Chunk c;
+        WorldBuildChunk(i, &c);
+
+        /* Escape platforms stack in one column at one storey spacing. */
+        for (int a = 0; a < c.solidCount; a++)
+        {
+            if (c.kinds[a] != SOLID_LEDGE || c.solids[a].height >= 10.0f) continue;
+
+            float best = 1e9f;
+
+            for (int b = 0; b < c.solidCount; b++)
+            {
+                if (a == b || c.kinds[b] != SOLID_LEDGE || c.solids[b].height >= 10.0f) continue;
+                if (fabsf(c.solids[b].x - c.solids[a].x) > 4.0f) continue;
+
+                float rise = c.solids[a].y - c.solids[b].y;
+                if (rise > 0.0f && rise < best) best = rise;
+            }
+
+            if (best < 1e8f && best > worstRise) worstRise = best;
+        }
+    }
+
+    printf("    tallest step between escape platforms: %.0f, jump is %.0f\n",
+           (double)worstRise, (double)CatMaxJumpHeight());
+
+    Check("every escape step is inside one jump", worstRise < CatMaxJumpHeight(), true);
+}
+
 void SuiteDistrict(void)
 {
     TestDistrictsAreRegionsNotNoise();
     TestApartmentsCanBeEntered();
     TestCavesCanBeLeft();
+    TestBuildingsAreSolidObjects();
+    TestFireEscapesAreClimbable();
 }

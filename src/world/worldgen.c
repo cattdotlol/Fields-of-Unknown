@@ -161,6 +161,17 @@ static bool Add(Chunk *c, Rectangle r, SolidKind kind)
     return true;
 }
 
+static bool AddDecor(Chunk *c, Rectangle r, DecorKind kind)
+{
+    if (c->decorCount >= CHUNK_MAX_DECOR) return false;
+
+    c->decor[c->decorCount].rect = r;
+    c->decor[c->decorCount].kind = (unsigned char)kind;
+    c->decorCount++;
+
+    return true;
+}
+
 static bool RectsOverlap(Rectangle a, Rectangle b)
 {
     return !(a.x + a.width <= b.x || b.x + b.width <= a.x ||
@@ -313,32 +324,118 @@ typedef struct Seg {
 #define DOOR_H    46.0f
 #define HOLE_W    56.0f
 
+#define FACADE_T  16.0f
+#define BAY_WIDTH 130.0f
+
 static void BuildApartment(Chunk *c, Rand *rnd, float x, float groundTop, float width)
 {
-    int storeys = 2 + (int)(RandNext(rnd) * 3.0f);        /* 2..4 */
+    int storeys = 3 + (int)(RandNext(rnd) * 3.0f);        /* 3..5 */
     float total = (float)storeys * STOREY_H;
     float top = groundTop - total;
 
-    Add(c, (Rectangle){ x + width - WALL_T, top, WALL_T, total }, SOLID_WALL);
+    float inX = x + FACADE_T;
+    float inW = width - FACADE_T * 2.0f;
 
-    /* The left wall stops short of the ground: that gap is the door. */
-    Add(c, (Rectangle){ x, top, WALL_T, total - DOOR_H }, SOLID_WALL);
+    if (inW < 100.0f) return;      /* too narrow to be a building */
 
-    Add(c, (Rectangle){ x - 4.0f, top - WALL_T, width + 8.0f, WALL_T }, SOLID_ROOF);
+    /* The inside, drawn behind everything. Without this you see the
+       skyline straight through the block and it reads as scaffolding. */
+    AddDecor(c, (Rectangle){ x, top, width, total }, DECOR_ROOM);
 
-    float inX = x + WALL_T;
-    float inW = width - WALL_T * 2.0f;
+    AddDecor(c, (Rectangle){ x - 7.0f, groundTop - 12.0f, width + 14.0f, 14.0f },
+             DECOR_PLINTH);
 
-    for (int storey = 1; storey < storeys; storey++)
+    /* Facades. The left one stops short of the ground; that gap is the
+       entrance. */
+    Add(c, (Rectangle){ x, top, FACADE_T, total - DOOR_H }, SOLID_WALL);
+    Add(c, (Rectangle){ x + width - FACADE_T, top, FACADE_T, total }, SOLID_WALL);
+
+    /* Structural bays. Drawn, not collided with: a 10-unit column the cat
+       cannot squeeze past would wall the interior off. */
+    int bays = (int)(inW / BAY_WIDTH);
+    if (bays < 1) bays = 1;
+    if (bays > 5) bays = 5;
+
+    for (int b = 1; b < bays; b++)
     {
-        float fy = groundTop - (float)storey * STOREY_H;
+        float px = inX + inW * (float)b / (float)bays;
+        AddDecor(c, (Rectangle){ px - 5.0f, top, 10.0f, total }, DECOR_PILLAR);
+    }
 
-        float holeX = ((storey & 1) != 0) ? (inX + inW - HOLE_W - 26.0f)
-                                          : (inX + 26.0f);
+    float bayW = inW / (float)bays;
 
-        Add(c, (Rectangle){ inX, fy, holeX - inX, FLOOR_T }, SOLID_FLOOR);
-        Add(c, (Rectangle){ holeX + HOLE_W, fy,
-                            (inX + inW) - (holeX + HOLE_W), FLOOR_T }, SOLID_FLOOR);
+    for (int storey = 0; storey < storeys; storey++)
+    {
+        float ceiling = groundTop - (float)(storey + 1) * STOREY_H;
+        float floorY  = groundTop - (float)storey * STOREY_H;
+
+        /* A slab between storeys, with a stairwell gap that alternates
+           sides so climbing is a walk across each floor. */
+        if (storey > 0)
+        {
+            float holeX = ((storey & 1) != 0) ? (inX + inW - HOLE_W - 24.0f)
+                                              : (inX + 24.0f);
+
+            Add(c, (Rectangle){ inX, floorY, holeX - inX, FLOOR_T }, SOLID_FLOOR);
+            Add(c, (Rectangle){ holeX + HOLE_W, floorY,
+                                (inX + inW) - (holeX + HOLE_W), FLOOR_T }, SOLID_FLOOR);
+        }
+
+        /* One window per bay, sat high in the room the way they are. */
+        for (int b = 0; b < bays; b++)
+        {
+            float bx = inX + bayW * (float)b;
+            float ww = (bayW * 0.44f > 34.0f) ? 34.0f : bayW * 0.44f;
+
+            Rectangle window = { bx + (bayW - ww) * 0.5f, ceiling + 22.0f, ww, 30.0f };
+
+            bool lit = (RandNext(rnd) < 0.30f);
+            AddDecor(c, window, lit ? DECOR_WINDOW_LIT : DECOR_WINDOW);
+        }
+    }
+
+    /* Roof, parapet, and the clutter that lives on top of real ones. */
+    Add(c, (Rectangle){ x - 5.0f, top - 12.0f, width + 10.0f, 12.0f }, SOLID_ROOF);
+
+    AddDecor(c, (Rectangle){ x - 7.0f, top - 28.0f, 7.0f, 18.0f }, DECOR_RAILING);
+    AddDecor(c, (Rectangle){ x + width, top - 28.0f, 7.0f, 18.0f }, DECOR_RAILING);
+
+    float roofY = top - 12.0f;
+
+    if (RandNext(rnd) < 0.70f)
+    {
+        AddDecor(c, (Rectangle){ x + width * 0.22f, roofY - 28.0f, 32.0f, 28.0f },
+                 DECOR_TANK);
+    }
+
+    if (RandNext(rnd) < 0.60f)
+    {
+        AddDecor(c, (Rectangle){ x + width * 0.58f, roofY - 15.0f, 24.0f, 15.0f },
+                 DECOR_VENT);
+    }
+
+    if (RandNext(rnd) < 0.55f)
+    {
+        AddDecor(c, (Rectangle){ x + width * 0.80f, roofY - 64.0f, 3.0f, 64.0f },
+                 DECOR_ANTENNA);
+    }
+
+    /* A fire escape: real, climbable, and the reason to look up. */
+    if (RandNext(rnd) < 0.45f)
+    {
+        for (int storey = 1; storey < storeys; storey++)
+        {
+            float y = groundTop - (float)storey * STOREY_H;
+
+            /* Margin zero: this is bolted to the facade, so touching it
+               is the point. A margin pushed every platform into the wall
+               and none of them were ever placed. */
+            if (AddIfClear(c, (Rectangle){ x - 36.0f, y, 36.0f, 8.0f }, SOLID_LEDGE, 0.0f))
+            {
+                AddDecor(c, (Rectangle){ x - 36.0f, y - 20.0f, 3.0f, 20.0f }, DECOR_RAILING);
+                AddDecor(c, (Rectangle){ x - 4.0f,  y - 20.0f, 3.0f, 20.0f }, DECOR_RAILING);
+            }
+        }
     }
 }
 
@@ -405,6 +502,7 @@ static void BuildOnce(int index, unsigned int salt, Chunk *out)
     out->treeCount = 0;
     out->mushroomCount = 0;
     out->weedCount = 0;
+    out->decorCount = 0;
 
     District district = WorldDistrictAt(index);
 
@@ -622,6 +720,7 @@ void WorldBuildChunk(int index, Chunk *out)
     out->treeCount = 0;
     out->mushroomCount = 0;
     out->weedCount = 0;
+    out->decorCount = 0;
 
     float x0 = (float)index * CHUNK_WIDTH;
     float top = WorldEdgeHeight(index);

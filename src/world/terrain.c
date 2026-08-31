@@ -255,6 +255,55 @@ void TerrainDraw(float left, float right, Rectangle focus)
         }
     }
 
+    /* Decor behind the solids: interiors, windows and columns are what
+       a building is mostly made of, and none of them are collided with. */
+    for (int c = 0; c < TERRAIN_LOADED_CHUNKS; c++)
+    {
+        if (!sChunks[c].active) continue;
+
+        for (int d = 0; d < sChunks[c].decorCount; d++)
+        {
+            Rectangle r = sChunks[c].decor[d].rect;
+            if (r.x + r.width < left || r.x > right) continue;
+
+            switch (sChunks[c].decor[d].kind)
+            {
+                case DECOR_ROOM:
+                    /* Opaque, so the skyline does not show through. */
+                    DrawRectangleRec(r, (Color){ 21, 19, 23, 255 });
+                    break;
+
+                case DECOR_PILLAR:
+                    DrawRectangleRec(r, (Color){ 34, 31, 35, 255 });
+                    DrawRectangle((int)r.x, (int)r.y, 2, (int)r.height,
+                                  (Color){ 48, 44, 48, 255 });
+                    break;
+
+                case DECOR_WINDOW:
+                    DrawRectangleRec(r, (Color){ 15, 17, 24, 255 });
+                    DrawRectangleLinesEx(r, 2.0f, (Color){ 40, 38, 42, 255 });
+                    break;
+
+                case DECOR_WINDOW_LIT:
+                {
+                    DrawRectangleRec(r, (Color){ 168, 132, 68, 255 });
+
+                    /* A frame, so it reads as a window and not a slab. */
+                    DrawRectangle((int)(r.x + r.width * 0.5f - 1.0f), (int)r.y,
+                                  2, (int)r.height, (Color){ 40, 32, 22, 255 });
+                    DrawRectangleLinesEx(r, 2.0f, (Color){ 46, 40, 34, 255 });
+                    break;
+                }
+
+                case DECOR_PLINTH:
+                    DrawRectangleRec(r, (Color){ 40, 38, 40, 255 });
+                    break;
+
+                default: break;
+            }
+        }
+    }
+
     for (int i = 0; i < sFlatCount; i++)
     {
         Rectangle r = sFlat[i];
@@ -321,6 +370,55 @@ void TerrainDraw(float left, float right, Rectangle focus)
                     DrawRectangle((int)x, (int)(r.y - 3.0f), 3, 3, moss);
                 }
                 break;
+        }
+    }
+
+    /* Decor in front: things that sit on top of the structure. */
+    for (int c = 0; c < TERRAIN_LOADED_CHUNKS; c++)
+    {
+        if (!sChunks[c].active) continue;
+
+        for (int d = 0; d < sChunks[c].decorCount; d++)
+        {
+            Rectangle r = sChunks[c].decor[d].rect;
+            if (r.x + r.width < left || r.x > right) continue;
+
+            switch (sChunks[c].decor[d].kind)
+            {
+                case DECOR_RAILING:
+                    DrawRectangleRec(r, (Color){ 52, 50, 54, 255 });
+                    break;
+
+                case DECOR_TANK:
+                    DrawRectangleRec(r, (Color){ 46, 44, 42, 255 });
+                    DrawRectangle((int)r.x, (int)r.y, (int)r.width, 3,
+                                  (Color){ 68, 64, 60, 255 });
+                    /* Legs, so it stands on the roof rather than floating. */
+                    DrawRectangle((int)(r.x + 3.0f), (int)(r.y + r.height), 3, 5,
+                                  (Color){ 34, 32, 32, 255 });
+                    DrawRectangle((int)(r.x + r.width - 6.0f), (int)(r.y + r.height), 3, 5,
+                                  (Color){ 34, 32, 32, 255 });
+                    break;
+
+                case DECOR_VENT:
+                    DrawRectangleRec(r, (Color){ 54, 56, 58, 255 });
+                    for (float vx = r.x + 3.0f; vx < r.x + r.width - 2.0f; vx += 5.0f)
+                    {
+                        DrawRectangle((int)vx, (int)(r.y + 3.0f), 2, (int)(r.height - 6.0f),
+                                      (Color){ 32, 34, 36, 255 });
+                    }
+                    break;
+
+                case DECOR_ANTENNA:
+                    DrawRectangleRec(r, (Color){ 44, 42, 46, 255 });
+                    DrawRectangle((int)(r.x - 5.0f), (int)(r.y + 8.0f), 13, 2,
+                                  (Color){ 44, 42, 46, 255 });
+                    DrawRectangle((int)(r.x - 3.0f), (int)(r.y + 18.0f), 9, 2,
+                                  (Color){ 44, 42, 46, 255 });
+                    break;
+
+                default: break;
+            }
         }
     }
 
