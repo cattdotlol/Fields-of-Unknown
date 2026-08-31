@@ -48,6 +48,8 @@ test:
 	$(CC) $(CFLAGS) -g -O0 -o $(BUILD)/tests/run $(TEST_SRCS) $(LDLIBS)
 	@./$(BUILD)/tests/run
 
+VERSION ?= 0.1.0
+
 # --- windows cross build -----------------------------------------------
 # Needs: sudo dnf install mingw64-gcc
 # raylib is not packaged for mingw, so it is built from source into
@@ -97,7 +99,6 @@ dist-windows: windows
 	@echo "  $(DIST)/$(WINPKG).zip"
 	@echo
 
-VERSION ?= 0.1.0
 SRCPKG  := fields-of-unknown-$(VERSION)-src
 PKG     := fields-of-unknown-$(VERSION)-linux-x86_64
 DIST    := dist
