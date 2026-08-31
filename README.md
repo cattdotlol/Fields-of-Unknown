@@ -1,5 +1,7 @@
 # Fields of Unknown
 
+[![build](https://github.com/cattdotlol/Fields-of-Unknown/actions/workflows/ci.yml/badge.svg)](https://github.com/cattdotlol/Fields-of-Unknown/actions/workflows/ci.yml)
+
 A feral cat wakes on a planet nobody charted, in an overgrown industrial
 sprawl that is half underwater and still raining.
 

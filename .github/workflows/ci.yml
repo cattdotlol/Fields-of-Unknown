@@ -1,0 +1,128 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # raylib is not packaged on every distro, so it is vendored and static.
+  # The Makefile takes it through these three variables.
+  RAYLIB_CFLAGS: -I${{ github.workspace }}/vendor/raylib/src
+  RAYLIB_LIBS: ${{ github.workspace }}/vendor/raylib/src/libraylib.a
+  SYS_LIBS: -lGL -lX11 -lXrandr -lXi -lXcursor -lXinerama -lm -lpthread -ldl -lrt
+
+jobs:
+  linux:
+    name: linux · build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config \
+            libgl1-mesa-dev libx11-dev libxrandr-dev libxi-dev \
+            libxcursor-dev libxinerama-dev libxkbcommon-dev
+
+      - name: Cache raylib
+        id: raylib-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor/raylib
+          key: raylib-5.5-linux
+
+      - name: Build raylib
+        if: steps.raylib-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch 5.5 \
+            https://github.com/raysan5/raylib.git vendor/raylib
+          make -C vendor/raylib/src PLATFORM=PLATFORM_DESKTOP \
+            RAYLIB_LIBTYPE=STATIC -j"$(nproc)"
+
+      # The build is warning-free today; this keeps it that way.
+      - name: Build
+        run: |
+          set -o pipefail
+          make release 2>&1 | tee build.log
+          if grep -q "warning:" build.log; then
+            echo "::error::the build produced warnings"
+            exit 1
+          fi
+
+      # Nothing in the suite opens a window, so it runs headless as-is.
+      - name: Test
+        run: make test
+
+      - name: Package
+        run: |
+          mkdir -p out/fields-of-unknown-linux-x86_64
+          cp build/game out/fields-of-unknown-linux-x86_64/
+          cp -r assets out/fields-of-unknown-linux-x86_64/
+          printf 'Run ./game with assets/ beside it.\n' \
+            > out/fields-of-unknown-linux-x86_64/README.txt
+          tar -C out -czf fields-of-unknown-linux-x86_64.tar.gz \
+            fields-of-unknown-linux-x86_64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fields-of-unknown-linux-x86_64
+          path: fields-of-unknown-linux-x86_64.tar.gz
+          if-no-files-found: error
+
+  windows:
+    name: windows · cross build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mingw
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-mingw-w64-x86-64 zip
+
+      - name: Cache raylib (mingw)
+        uses: actions/cache@v4
+        with:
+          path: vendor/raylib-win
+          key: raylib-5.5-mingw
+
+      # The makefile clones and cross-builds raylib itself if it is absent.
+      - name: Build
+        run: make dist-windows
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fields-of-unknown-windows-x64
+          path: dist/*-windows-x64.zip
+          if-no-files-found: error
+
+  release:
+    name: publish release
+    needs: [linux, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Attach builds to the tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            artifacts/*/*
