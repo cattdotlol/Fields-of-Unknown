@@ -30,6 +30,14 @@
 static Camera2D sCam;
 static bool     sDebug;
 
+/* The camera is smoothed in the fixed step and interpolated at draw time,
+   exactly like the cat. Smoothing it per-frame against an already
+   interpolated target meant the cat carried the interpolation jitter and
+   the camera did not, so the world shook by up to one tick of movement
+   whenever frame timing was uneven. */
+static Vector2 sCamPrev;
+static Vector2 sCamNow;
+
 /* Dying used to be a silent teleport home: one frame at chunk five, the
    next at chunk zero, with nothing to say what had happened. */
 static float sHurt;        /* red flash, decays          */
@@ -53,7 +61,11 @@ static void RestartRun(void)
     RatsReset();
     StalkersReset();
 
-    sCam.target = CatPosition();
+    sCamNow = CatPosition();
+    sCamNow.y -= 24.0f;
+    sCamPrev = sCamNow;
+    sCam.target = sCamNow;
+
     sLastHealth = gVitals.health;
 }
 
@@ -66,23 +78,40 @@ static void Init(void)
     sDebug = false;
 }
 
-static void FollowCat(float dt)
+/* Fixed step: deterministic, and in simulation space. */
+static void CameraStep(float dt)
+{
+    Vector2 want = CatPosition();
+    want.y -= 24.0f;
+
+    /* Lead the way the cat is actually going. The old test compared the
+       left edge of the box to its centre, which is always true, so the
+       camera leaned right even when running left. */
+    if (CatCurrentState() == CAT_RUN)
+    {
+        want.x += (CatVelocityX() > 0.0f) ? CAM_LOOK : -CAM_LOOK;
+    }
+
+    sCamPrev = sCamNow;
+
+    sCamNow.x += (want.x - sCamNow.x) * CAM_LAG * dt;
+    sCamNow.y += (want.y - sCamNow.y) * CAM_LAG * dt;
+}
+
+/* Per frame: same alpha the cat is drawn with, so the two never drift. */
+static void CameraApply(void)
 {
     float zoom = ThemeScale() * WORLD_ZOOM;
     if (zoom < 0.05f) zoom = 0.05f;   /* a minimised window reports zero */
 
+    float a = AppRenderAlpha();
+
     sCam.zoom = zoom;
-    sCam.offset = (Vector2){ (float)GetScreenWidth() * 0.5f, (float)GetScreenHeight() * 0.55f };
+    sCam.offset = (Vector2){ (float)GetScreenWidth() * 0.5f,
+                             (float)GetScreenHeight() * 0.55f };
 
-    Vector2 want = CatRenderPosition(AppRenderAlpha());
-    want.y -= 24.0f;
-
-    /* Look ahead slightly, so running does not crowd the screen edge. */
-    if (CatCurrentState() == CAT_RUN) want.x += CAM_LOOK * ((CatBounds().x < want.x) ? 1.0f : -1.0f);
-
-    sCam.target.x += (want.x - sCam.target.x) * CAM_LAG * dt;
-    sCam.target.y += (want.y - sCam.target.y) * CAM_LAG * dt;
-
+    sCam.target.x = sCamPrev.x + (sCamNow.x - sCamPrev.x) * a;
+    sCam.target.y = sCamPrev.y + (sCamNow.y - sCamPrev.y) * a;
 }
 
 static void FixedUpdate(float dt)
@@ -123,6 +152,8 @@ static void FixedUpdate(float dt)
 
     /* Generate ahead of wherever the cat has got to. */
     TerrainStream(CatPosition().x);
+
+    CameraStep(dt);
 
     VitalsUpdate(dt);
     MushroomTick(dt);
@@ -174,15 +205,7 @@ static void Update(float dt)
 
     /* While the menu is up it owns the keyboard, or arrow keys would move
        the cat and browse the menu at the same time. */
-    if (DevToolsUpdate(dt))
-    {
-        FollowCat(dt);
-        return;
-    }
-
-    /* Camera runs per-frame off the interpolated position, so it stays
-       smooth on displays faster than the tick rate. */
-    FollowCat(dt);
+    if (DevToolsUpdate(dt)) return;
 
     if (InputPressed(ACT_DEBUG)) sDebug = !sDebug;
 
@@ -259,6 +282,8 @@ static void DrawDebug(void)
 
 static void Draw(void)
 {
+    CameraApply();
+
     FloodSceneDraw(1.0f, WeatherRain(), sCam.target.x, WeatherIsSnow());
 
     Vector2 topLeft = GetScreenToWorld2D((Vector2){ 0.0f, 0.0f }, sCam);

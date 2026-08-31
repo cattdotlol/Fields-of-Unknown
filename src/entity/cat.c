@@ -42,6 +42,10 @@
 /* Buoyancy settles the cat at SWIM_SINK / (SWIM_BUOYANCY * 0.02) below
    the surface, which is 13.3. The kick window has to be deeper than that
    or it can never fire and the water is a trap - which it was. */
+#define SWIM_DIVE     520.0f    /* pushing down against buoyancy */
+#define SWIM_RISE     460.0f
+#define SWIM_VMAX     150.0f
+
 #define SWIM_SURFACE   28.0f
 #define SWIM_KICK       0.88f
 
@@ -51,6 +55,7 @@ typedef struct Cat {
     float    facing;       /* +1 right, -1 left */
     bool     crouching;
     bool     swimming;
+    bool     submerged;
     float    coyote;
     float    buffer;
     float    stride;       /* walk-cycle phase */
@@ -141,6 +146,9 @@ void CatFixedUpdate(float dt)
     float midY = sCat.body.pos.y - BodyHeight() * 0.5f;
     sCat.swimming = (midY > waterY);
 
+    /* The head, not the middle: you can swim along the top and breathe. */
+    sCat.submerged = ((sCat.body.pos.y - BodyHeight()) > waterY);
+
     if (InputPressed(ACT_JUMP)) sCat.buffer = JUMP_BUFFER;
     if (sCat.buffer > 0.0f) sCat.buffer -= dt;
     if (sCat.coyote > 0.0f) sCat.coyote -= dt;
@@ -155,13 +163,23 @@ void CatFixedUpdate(float dt)
         if (sCat.body.vel.x >  SWIM_MAX) sCat.body.vel.x =  SWIM_MAX;
         if (sCat.body.vel.x < -SWIM_MAX) sCat.body.vel.x = -SWIM_MAX;
 
-        /* Float toward the surface rather than bobbing on it. */
         float depth = midY - waterY;
-        sCat.body.vel.y += (SWIM_SINK - depth * SWIM_BUOYANCY * 0.02f) * dt;
+
+        /* Holding down beats buoyancy; that is what diving is. */
+        bool diving = InputDown(ACT_DOWN) || InputDown(ACT_CROUCH);
+        bool rising = InputDown(ACT_UP);
+
+        if (diving)       sCat.body.vel.y += SWIM_DIVE * dt;
+        else if (rising)  sCat.body.vel.y -= SWIM_RISE * dt;
+        else              sCat.body.vel.y += (SWIM_SINK - depth * SWIM_BUOYANCY * 0.02f) * dt;
+
         sCat.body.vel.y -= sCat.body.vel.y * SWIM_DRAG * dt;
 
+        if (sCat.body.vel.y >  SWIM_VMAX) sCat.body.vel.y =  SWIM_VMAX;
+        if (sCat.body.vel.y < -SWIM_VMAX) sCat.body.vel.y = -SWIM_VMAX;
+
         /* Kicking off at the surface, to get back onto a ledge. */
-        if (sCat.buffer > 0.0f && depth < SWIM_SURFACE)
+        if (sCat.buffer > 0.0f && !diving && depth < SWIM_SURFACE)
         {
             sCat.body.vel.y = JUMP_VELOCITY * SWIM_KICK;
             sCat.buffer = 0.0f;
@@ -261,7 +279,9 @@ Vector2 CatRenderPosition(float alpha)
 
 CatState CatCurrentState(void) { return sCat.state; }
 bool     CatIsSwimming(void)   { return sCat.swimming; }
+bool     CatIsSubmerged(void)  { return sCat.submerged; }
 float    CatNoise(void)        { return sCat.noise; }
+float    CatVelocityX(void)    { return sCat.body.vel.x; }
 
 void CatShove(float vx, float vy)
 {

@@ -1,4 +1,5 @@
 #include "ui/hud.h"
+#include "entity/cat.h"
 #include "entity/vitals.h"
 #include "ui/theme.h"
 #include "world/season.h"
@@ -132,7 +133,23 @@ void HudDraw(void)
     Bar(x, below + step,     w, h, gVitals.stamina, stamina, "STAMINA");
     Bar(x, below + step * 2, w, h, gVitals.warmth,  warmth,  "WARMTH");
 
+    /* Breath only appears when it is being spent. Nothing to think about
+       until the cat is under. */
+    if (gVitals.breath < 0.999f || CatIsSubmerged())
+    {
+        float by = below + step * 3.0f;
+        Color air = (Color){ 118, 186, 214, 255 };
+
+        if (gVitals.breath < 0.3f)
+        {
+            float beat = 0.5f + 0.5f * sinf((float)GetTime() * 7.0f);
+            air = ColorLerp(air, (Color){ 226, 240, 250, 255 }, beat);
+        }
+
+        Bar(x, by, w, h, gVitals.breath, air, "BREATH");
+    }
+
     /* Season and sky, which are what is doing this to the rest. */
     const char *line = TextFormat("%s   %s", SeasonName(), WeatherName());
-    UiText(line, x, below + step * 3 + 4.0f * s, 10.0f * s, gTheme.accent);
+    UiText(line, x, below + step * 4 + 4.0f * s, 10.0f * s, gTheme.accent);
 }

@@ -12,6 +12,7 @@ typedef struct Vitals {
     float hunger;    /* 1 = fed, 0 = starving */
     float stamina;   /* 0..1, gates running */
     float warmth;    /* 0..1, drained by rain, water and cold seasons */
+    float breath;    /* 0..1, only spends while the head is under */
     bool  dead;
 } Vitals;
 

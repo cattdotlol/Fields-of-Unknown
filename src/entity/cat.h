@@ -27,10 +27,12 @@ Vector2   CatRenderPosition(float alpha); /* interpolated, for the camera */
 Rectangle CatBounds(void);
 CatState  CatCurrentState(void);
 bool      CatIsSwimming(void);
+bool      CatIsSubmerged(void);   /* head under, not just floating */
 
 /* 0..1 after weather masking - how far the cat's noise carries. Stealth
    and predators will read this. */
 float CatNoise(void);
+float CatVelocityX(void);
 
 /* Derived from the movement constants. World generation reads these so a
    change to gravity or jump strength cannot silently produce a level the

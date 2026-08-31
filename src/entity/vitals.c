@@ -17,6 +17,12 @@ Vitals gVitals;
 #define WARMTH_BASE     0.0025f
 #define WARMTH_REGEN    0.0060f
 
+/* Sixteen seconds under, two seconds to get it back. Drowning is meant
+   to be faster than starving: it is the one that should panic you. */
+#define BREATH_DRAIN    0.0620f
+#define BREATH_REFILL   0.5000f
+#define HEALTH_DROWNING 0.1000f
+
 #define HEALTH_STARVING 0.0200f
 #define HEALTH_FREEZING 0.0100f
 #define HEALTH_REGEN    0.0060f
@@ -34,6 +40,7 @@ void VitalsReset(void)
     gVitals.hunger = 0.85f;
     gVitals.stamina = 1.0f;
     gVitals.warmth = 0.75f;
+    gVitals.breath = 1.0f;
     gVitals.dead = false;
 }
 
@@ -115,8 +122,22 @@ void VitalsUpdate(float dt)
         gVitals.stamina = Clamp01(gVitals.stamina + rate * dt);
     }
 
+    /* --- breath -------------------------------------------------------
+       Only the head being under counts; swimming along the surface is
+       free. */
+    if (CatIsSubmerged())
+    {
+        gVitals.breath = Clamp01(gVitals.breath - BREATH_DRAIN * dt);
+    }
+    else
+    {
+        gVitals.breath = Clamp01(gVitals.breath + BREATH_REFILL * dt);
+    }
+
     /* --- health follows from the rest --------------------------------- */
     float drain = 0.0f;
+
+    if (gVitals.breath <= 0.0f) drain += HEALTH_DROWNING;
     if (gVitals.hunger <= 0.0f) drain += HEALTH_STARVING;
     if (gVitals.warmth <= 0.0f) drain += HEALTH_FREEZING;
 
