@@ -61,6 +61,7 @@ intend to play it.
 | `Shift` | run |
 | `Ctrl` / `S` / `Down` | crouch |
 | `Space` | jump |
+| `E` / `F` | eat whatever you are standing on |
 | `Esc` | back / menu |
 | `F1` | debug overlay |
 | `F5` | reroll the world |
@@ -102,6 +103,12 @@ without the two sides ever talking to each other.
 reads `CatMaxJumpHeight()` and `CatMaxRunJumpDistance()` — both derived
 from the movement constants — and rejects any chunk it cannot cross.
 Change gravity or jump strength and the level generator retunes itself.
+
+**Weather is heard as well as seen.** Rain streams from `assets/` and its
+volume follows the storm. Thunder is *generated* at startup rather than
+shipped — brown noise under a decay envelope, normalised so it never
+clips — so a strike flashes immediately and the rumble arrives a second or
+four later depending on how far off it was.
 
 **Weather is a difficulty dial, not scenery.** Rain masks the cat's scent
 and noise, but it also raises the water, which drowns the ground route and

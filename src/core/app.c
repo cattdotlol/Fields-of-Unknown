@@ -1,5 +1,6 @@
 #include "core/app.h"
 #include "core/config.h"
+#include "core/audio.h"
 #include "core/input.h"
 #include "core/settings.h"
 #include "core/sysinfo.h"
@@ -82,6 +83,7 @@ void AppInit(void)
     SettingsApply();
 
     ThemeLoad();
+    AudioLoad();
     CursorLoad();
     SysInfoGather();          /* needs the GL context InitWindow created */
     FloodSceneInit(WORLD_SEED);
@@ -151,6 +153,7 @@ void AppRun(void)
             }
         }
 
+        AudioUpdate();
         CursorUpdate(frame);
 
         /* Input is frozen mid-transition so a held key cannot double-fire. */
@@ -164,6 +167,13 @@ void AppRun(void)
                 /* Menus sit in the same place the game does. */
                 FloodSceneDraw(1.0f, WeatherRain(), 0.0f, WeatherIsSnow());
                 FilmVignette(0.7f);
+
+                float flash = WeatherFlash();
+                if (flash > 0.0f)
+                {
+                    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                                  Fade(RAYWHITE, flash * 0.30f));
+                }
             }
             if (sScreens[sCurrent]->draw) sScreens[sCurrent]->draw();
 
@@ -182,6 +192,7 @@ void AppShutdown(void)
 
     SettingsSave(SETTINGS_FILE);
 
+    AudioUnload();
     ThemeUnload();
     CloseAudioDevice();
     CloseWindow();

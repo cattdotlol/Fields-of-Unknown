@@ -188,6 +188,14 @@ static void Draw(void)
 
     FilmVignette(0.6f);
 
+    /* Lightning: the flash lands now, the sound arrives later. */
+    float flash = WeatherFlash();
+    if (flash > 0.0f)
+    {
+        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                      Fade(RAYWHITE, flash * 0.42f));
+    }
+
     if (gSettings.showHud) HudDraw();
     if (sDebug) DrawDebug();
 }

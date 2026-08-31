@@ -60,9 +60,10 @@ dist: clean release
 	@mkdir -p $(DIST)/$(PKG)/lib
 	@cp $(BUILD)/$(NAME) $(DIST)/$(PKG)/
 	@cp -L "$$(ldd $(BUILD)/$(NAME) | awk '/libraylib/{print $$3}')" $(DIST)/$(PKG)/lib/
+	@cp -r assets $(DIST)/$(PKG)/
 	@printf '#!/bin/sh\ncd "$$(dirname "$$0")" || exit 1\nexec ./$(NAME) "$$@"\n' > $(DIST)/$(PKG)/run.sh
 	@chmod +x $(DIST)/$(PKG)/run.sh
-	@cp packaging/README.dist.txt $(DIST)/$(PKG)/README.txt
+	@printf 'FIELDS OF UNKNOWN\n\nRun ./run.sh\n\nKeep assets/ next to the game.\n' > $(DIST)/$(PKG)/README.txt
 	@cd $(DIST) && zip -qr $(PKG).zip $(PKG)
 	@echo
 	@echo "  $(DIST)/$(PKG).zip  ($$(du -h $(DIST)/$(PKG).zip | cut -f1))"
@@ -74,8 +75,7 @@ dist: clean release
 dist-src:
 	@rm -rf $(DIST)/$(SRCPKG) $(DIST)/$(SRCPKG).zip
 	@mkdir -p $(DIST)/$(SRCPKG)
-	@cp -r src tests packaging Makefile $(DIST)/$(SRCPKG)/
-	@cp packaging/README.src.txt $(DIST)/$(SRCPKG)/README.txt
+	@cp -r src tests assets Makefile README.md $(DIST)/$(SRCPKG)/
 	@cd $(DIST) && zip -qr $(SRCPKG).zip $(SRCPKG)
 	@echo
 	@echo "  $(DIST)/$(SRCPKG).zip  ($$(du -h $(DIST)/$(SRCPKG).zip | cut -f1))"

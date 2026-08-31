@@ -41,6 +41,14 @@ static float sWind;
 static float sWindTarget;
 static float sTime;
 
+/* Lightning. A strike flashes immediately and the sound arrives later,
+   the way it does. */
+static float sFlash;
+static float sStrikeIn;
+static float sThunderIn;
+static float sThunderLoud;
+static bool  sThunderPending;
+
 static float Rand01(void)
 {
     return (float)GetRandomValue(0, 10000) / 10000.0f;
@@ -81,6 +89,11 @@ void WeatherInit(unsigned int seed)
     sTime = 0.0f;
     sWetness = 0.10f;   /* the ground starts dry; flooding is earned */
     sWind = 0.0f;
+    sFlash = 0.0f;
+    sStrikeIn = 20.0f;
+    sThunderIn = 0.0f;
+    sThunderLoud = 0.0f;
+    sThunderPending = false;
 
     EnterState(WEATHER_DRIZZLE);   /* it is wet, but not yet rising */
     sRain = sTarget;
@@ -109,6 +122,32 @@ void WeatherUpdate(float dt)
     if (sWetness < 0.0f) sWetness = 0.0f;
     if (sWetness > 1.0f) sWetness = 1.0f;
 
+    /* --- lightning --------------------------------------------------- */
+    if (sFlash > 0.0f) sFlash -= dt * 3.2f;
+
+    if (sRain > 0.55f)
+    {
+        sStrikeIn -= dt * (0.5f + sRain);
+
+        if (sStrikeIn <= 0.0f)
+        {
+            /* Distance decides both the delay and how loud it lands. */
+            float distance = Rand01();
+
+            sFlash = 1.0f - distance * 0.45f;
+            sThunderIn = 0.35f + distance * 4.5f;
+            sThunderLoud = 1.0f - distance * 0.65f;
+
+            sStrikeIn = 7.0f + Rand01() * 26.0f * (1.2f - sRain);
+        }
+    }
+
+    if (sThunderIn > 0.0f)
+    {
+        sThunderIn -= dt;
+        if (sThunderIn <= 0.0f) sThunderPending = true;
+    }
+
     sWind += gust * dt;
     if (sWind < -1.0f) sWind = -1.0f;
     if (sWind >  1.0f) sWind =  1.0f;
@@ -134,6 +173,21 @@ float WeatherScentMask(void)
 float WeatherNoiseMask(void)
 {
     return sRain * 0.75f;
+}
+
+float WeatherFlash(void)
+{
+    return (sFlash > 0.0f) ? sFlash : 0.0f;
+}
+
+bool WeatherConsumeThunder(float *loudness)
+{
+    if (!sThunderPending) return false;
+
+    sThunderPending = false;
+    if (loudness) *loudness = sThunderLoud;
+
+    return true;
 }
 
 bool WeatherIsSnow(void)

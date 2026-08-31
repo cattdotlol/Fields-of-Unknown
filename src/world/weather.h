@@ -31,6 +31,13 @@ float WeatherNoiseMask(void);
    and felt differently. */
 bool WeatherIsSnow(void);
 
+/* 0..1, spikes on a lightning strike and decays. Drawn as a flash. */
+float WeatherFlash(void);
+
+/* True once per strike, when the rumble should reach the cat - which is
+   after the flash, by however far away it was. */
+bool WeatherConsumeThunder(float *loudness);
+
 WeatherState WeatherCurrent(void);
 const char  *WeatherName(void);
 
