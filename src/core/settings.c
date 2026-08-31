@@ -15,6 +15,7 @@ void SettingsDefaults(void)
     gSettings.fullscreen   = false;
     gSettings.vsync        = true;
     gSettings.showFps      = true;
+    gSettings.showHud      = true;
 }
 
 void SettingsApply(void)
@@ -38,6 +39,7 @@ bool SettingsSave(const char *path)
     fprintf(f, "fullscreen=%d\n",   gSettings.fullscreen ? 1 : 0);
     fprintf(f, "vsync=%d\n",        gSettings.vsync ? 1 : 0);
     fprintf(f, "showfps=%d\n",      gSettings.showFps ? 1 : 0);
+    fprintf(f, "showhud=%d\n",      gSettings.showHud ? 1 : 0);
 
     fclose(f);
     return true;
@@ -62,6 +64,7 @@ bool SettingsLoad(const char *path)
         else if (strcmp(key, "fullscreen") == 0) gSettings.fullscreen   = (value != 0.0f);
         else if (strcmp(key, "vsync")      == 0) gSettings.vsync        = (value != 0.0f);
         else if (strcmp(key, "showfps")    == 0) gSettings.showFps      = (value != 0.0f);
+        else if (strcmp(key, "showhud")    == 0) gSettings.showHud      = (value != 0.0f);
     }
 
     fclose(f);

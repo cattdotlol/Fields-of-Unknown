@@ -1,6 +1,8 @@
 #ifndef WORLD_WEATHER_H
 #define WORLD_WEATHER_H
 
+#include <stdbool.h>
+
 /* Weather is the difficulty dial, not set dressing. Rain hides the cat's
    scent and noise but raises the water and closes routes; dry weather
    opens the map back up and leaves the cat trackable. */
@@ -24,6 +26,10 @@ float WeatherWaterY(void);      /* world y of the surface (smaller = higher) */
 /* 1 = fully covered, 0 = fully exposed. Stealth reads these. */
 float WeatherScentMask(void);
 float WeatherNoiseMask(void);
+
+/* Below freezing with something falling: the same precipitation, drawn
+   and felt differently. */
+bool WeatherIsSnow(void);
 
 WeatherState WeatherCurrent(void);
 const char  *WeatherName(void);

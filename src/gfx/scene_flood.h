@@ -1,6 +1,8 @@
 #ifndef GFX_SCENE_FLOOD_H
 #define GFX_SCENE_FLOOD_H
 
+#include <stdbool.h>
+
 /* The unknown planet: a half-flooded, overgrown industrial sprawl under
    an alien sky, with the wreck the cat came down in still sitting in the
    water. Geometry is normalised so it survives resizes, and it doubles
@@ -14,7 +16,7 @@ void  FloodSceneUpdate(float dt);
    cameraX: world x the view is centred on. The town scrolls past at a
             fraction of that and is generated from the building index, so
             it goes on as far as the world does. */
-void  FloodSceneDraw(float reveal, float rain, float cameraX);
+void  FloodSceneDraw(float reveal, float rain, float cameraX, bool snow);
 
 /* Screen-space y of the waterline, for placing things on it. */
 float FloodSceneWaterY(void);

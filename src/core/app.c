@@ -5,6 +5,7 @@
 #include "core/sysinfo.h"
 #include "gfx/filmfx.h"
 #include "gfx/scene_flood.h"
+#include "world/season.h"
 #include "world/weather.h"
 #include "ui/theme.h"
 #include "ui/cursor.h"
@@ -84,6 +85,7 @@ void AppInit(void)
     CursorLoad();
     SysInfoGather();          /* needs the GL context InitWindow created */
     FloodSceneInit(WORLD_SEED);
+    SeasonInit();
     WeatherInit(WORLD_SEED);
 
     sScreens[SCREEN_TITLE]    = &ScreenTitle;
@@ -109,6 +111,7 @@ void AppRun(void)
         int ticks = 0;
         while (sAccumulator >= TICK_DT && ticks < MAX_CATCHUP)
         {
+            SeasonUpdate(TICK_DT);
             WeatherUpdate(TICK_DT);
             FloodSceneUpdate(TICK_DT);
 
@@ -159,7 +162,7 @@ void AppRun(void)
             if (!sScreens[sCurrent]->opaque)
             {
                 /* Menus sit in the same place the game does. */
-                FloodSceneDraw(1.0f, WeatherRain(), 0.0f);
+                FloodSceneDraw(1.0f, WeatherRain(), 0.0f, WeatherIsSnow());
                 FilmVignette(0.7f);
             }
             if (sScreens[sCurrent]->draw) sScreens[sCurrent]->draw();

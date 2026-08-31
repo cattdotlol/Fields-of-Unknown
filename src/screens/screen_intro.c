@@ -213,7 +213,7 @@ static void Draw(void)
 
     ClearBackground(BLACK);
 
-    FloodSceneDraw(reveal, 0.85f, 0.0f);
+    FloodSceneDraw(reveal, 0.85f, 0.0f, false);
     DrawWatcher(reveal);
     DrawCat(reveal);
 

@@ -1,13 +1,17 @@
 #include "screens/screens.h"
 #include "core/app.h"
 #include "core/config.h"
+#include "core/settings.h"
 #include "core/input.h"
 #include "entity/cat.h"
+#include "entity/vitals.h"
 #include "gfx/filmfx.h"
 #include "gfx/scene_flood.h"
+#include "ui/hud.h"
 #include "ui/theme.h"
 #include "world/terrain.h"
 #include "world/worldgen.h"
+#include "world/season.h"
 #include "world/weather.h"
 
 #include "raylib.h"
@@ -26,6 +30,7 @@ static void Init(void)
     WorldSetSeed(WORLD_SEED);
     CatSpawn(WorldSpawnPoint());
     TerrainStream(CatPosition().x);
+    VitalsReset();
 
     sCam.target = CatPosition();
     sCam.rotation = 0.0f;
@@ -56,6 +61,17 @@ static void FixedUpdate(float dt)
 
     /* Generate ahead of wherever the cat has got to. */
     TerrainStream(CatPosition().x);
+
+    VitalsUpdate(dt);
+
+    /* Placeholder: back to the crash site. Dying should eventually cost
+       something the player can feel. */
+    if (gVitals.dead)
+    {
+        CatSpawn(WorldSpawnPoint());
+        TerrainStream(CatPosition().x);
+        VitalsReset();
+    }
 }
 
 static void Update(float dt)
@@ -111,6 +127,11 @@ static void DrawDebug(void)
         TextFormat("STATE    %s", StateName(CatCurrentState())),
         TextFormat("NOISE    %.2f", (double)CatNoise()),
         TextFormat("SCENT M. %.2f", (double)WeatherScentMask()),
+        TextFormat("SEASON   %s %.0f%%  temp %.2f", SeasonName(),
+                   (double)(SeasonProgress() * 100.0f), (double)SeasonTemperature()),
+        TextFormat("VITALS   hp %.2f food %.2f stam %.2f warm %.2f",
+                   (double)gVitals.health, (double)gVitals.hunger,
+                   (double)gVitals.stamina, (double)gVitals.warmth),
         TextFormat("SEED     %u", WorldSeed()),
         TextFormat("CHUNK    %d  [%d..%d]", (int)floorf(CatPosition().x / CHUNK_WIDTH),
                    dbgFirst, dbgLast),
@@ -132,7 +153,7 @@ static void DrawDebug(void)
 
 static void Draw(void)
 {
-    FloodSceneDraw(1.0f, WeatherRain(), sCam.target.x);
+    FloodSceneDraw(1.0f, WeatherRain(), sCam.target.x, WeatherIsSnow());
 
     Vector2 topLeft = GetScreenToWorld2D((Vector2){ 0.0f, 0.0f }, sCam);
     Vector2 botRight = GetScreenToWorld2D(
@@ -148,6 +169,7 @@ static void Draw(void)
 
     FilmVignette(0.6f);
 
+    if (gSettings.showHud) HudDraw();
     if (sDebug) DrawDebug();
 }
 

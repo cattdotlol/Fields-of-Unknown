@@ -1,4 +1,5 @@
 #include "world/weather.h"
+#include "world/season.h"
 
 #include "raylib.h"
 
@@ -92,8 +93,11 @@ void WeatherUpdate(float dt)
     sHold -= dt;
     if (sHold <= 0.0f) EnterState(NextState(sState));
 
-    /* Ease toward the target instead of snapping. */
-    sRain += (sTarget - sRain) * RAIN_LERP * dt;
+    /* The season decides how wet this state actually is. */
+    float target = sTarget * SeasonRainBias();
+    if (target > 1.0f) target = 1.0f;
+
+    sRain += (target - sRain) * RAIN_LERP * dt;
     sWind += (sWindTarget - sWind) * 0.20f * dt;
 
     /* Gusts, so wind never sits perfectly still. */
@@ -130,6 +134,11 @@ float WeatherScentMask(void)
 float WeatherNoiseMask(void)
 {
     return sRain * 0.75f;
+}
+
+bool WeatherIsSnow(void)
+{
+    return SeasonTemperature() < 0.32f && sRain > 0.05f;
 }
 
 WeatherState WeatherCurrent(void) { return sState; }

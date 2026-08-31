@@ -1,6 +1,7 @@
 #include "world/terrain.h"
 #include "world/weather.h"
 #include "world/worldgen.h"
+#include "world/season.h"
 
 #include <math.h>
 
@@ -121,9 +122,12 @@ static void DrawTree(const Tree *t)
 {
     Color bark   = (Color){ 22, 20, 26, 255 };
     Color barkLo = (Color){ 14, 13, 18, 255 };
-    Color leaf   = t->dead ? (Color){ 40, 34, 30, 255 } : (Color){ 26, 52, 34, 255 };
-    Color leafHi = t->dead ? (Color){ 54, 45, 38, 255 } : (Color){ 38, 74, 46, 255 };
+    Color leaf, leafHi;
+    SeasonFoliage(&leaf, &leafHi);
     Color alien  = (Color){ 58, 32, 72, 255 };
+
+    /* Bare either because this tree is dead, or because it is winter. */
+    bool bare = t->dead || (TreeRand(t->variant, 999u) < SeasonBareness());
 
     float topY = t->baseY - t->height;
 
@@ -157,7 +161,7 @@ static void DrawTree(const Tree *t)
         }
     }
 
-    if (t->dead) return;
+    if (bare) return;
 
     /* Canopy: clumps, not a circle. */
     int clumps = 5 + (int)(TreeRand(t->variant, 2) * 5.0f);

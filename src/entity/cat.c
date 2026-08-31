@@ -1,6 +1,7 @@
 #include "entity/cat.h"
 #include "entity/cat_art.h"
 #include "core/input.h"
+#include "entity/vitals.h"
 #include "world/physics.h"
 #include "world/terrain.h"
 #include "world/weather.h"
@@ -173,7 +174,9 @@ void CatFixedUpdate(float dt)
             sCat.crouching = wantCrouch;
         }
 
-        float top = sCat.crouching ? SPEED_CROUCH : (InputDown(ACT_RUN) ? SPEED_RUN : SPEED_WALK);
+        /* Out of breath means you simply cannot sprint. */
+        bool canRun = InputDown(ACT_RUN) && VitalsHasStamina(0.02f);
+        float top = sCat.crouching ? SPEED_CROUCH : (canRun ? SPEED_RUN : SPEED_WALK);
         float accel = sCat.body.grounded ? ACCEL_GROUND : ACCEL_AIR;
 
         if (move != 0.0f)
@@ -194,6 +197,7 @@ void CatFixedUpdate(float dt)
         if (sCat.buffer > 0.0f && sCat.coyote > 0.0f)
         {
             sCat.body.vel.y = JUMP_VELOCITY * (sCat.crouching ? 0.75f : 1.0f);
+            VitalsSpendStamina(0.06f);
             sCat.buffer = 0.0f;
             sCat.coyote = 0.0f;
             sCat.body.grounded = false;

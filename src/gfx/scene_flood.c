@@ -303,7 +303,7 @@ static void DrawPod(float reveal, float w, float waterY, float cell, float camer
     }
 }
 
-void FloodSceneDraw(float reveal, float rain, float cameraX)
+void FloodSceneDraw(float reveal, float rain, float cameraX, bool snow)
 {
     if (reveal < 0.0f) reveal = 0.0f;
     if (reveal > 1.0f) reveal = 1.0f;
@@ -385,8 +385,22 @@ void FloodSceneDraw(float reveal, float rain, float cameraX)
     {
         if (sRain[i].y > WATER_LINE) continue;
 
-        DrawRectangle((int)(sRain[i].x * fw), (int)(sRain[i].y * fh),
-                      (int)cell, (int)(sRain[i].len * fh),
-                      Fade(Mul((Color){ 150, 180, 190, 255 }, reveal), 0.18f + rain * 0.20f));
+        float px = sRain[i].x * fw;
+        float py = sRain[i].y * fh;
+
+        if (snow)
+        {
+            /* Flakes drift and tumble instead of falling in streaks. */
+            float drift = sinf(sTime * 0.8f + (float)i * 0.7f) * cell * 6.0f;
+
+            DrawRectangle((int)(px + drift), (int)(py * 0.85f),
+                          (int)(cell * 2.0f), (int)(cell * 2.0f),
+                          Fade(Mul((Color){ 226, 234, 240, 255 }, reveal), 0.35f + rain * 0.35f));
+        }
+        else
+        {
+            DrawRectangle((int)px, (int)py, (int)cell, (int)(sRain[i].len * fh),
+                          Fade(Mul((Color){ 150, 180, 190, 255 }, reveal), 0.18f + rain * 0.20f));
+        }
     }
 }

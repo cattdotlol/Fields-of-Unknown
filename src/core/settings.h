@@ -10,6 +10,7 @@ typedef struct Settings {
     bool  fullscreen;
     bool  vsync;
     bool  showFps;
+    bool  showHud;   /* vitals bars; off means reading the cat instead */
 } Settings;
 
 extern Settings gSettings;
