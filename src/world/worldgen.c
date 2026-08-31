@@ -1,8 +1,10 @@
 #include "world/worldgen.h"
 #include "entity/cat.h"
+#include "world/ocean.h"
 #include "world/weather.h"
 
 #include <math.h>
+#include <stddef.h>
 
 #define GROUND_DEPTH     280.0f
 #define GROUND_TOP_HIGH  520.0f   /* smallest y: highest ground */
@@ -17,6 +19,7 @@
 #define MAX_ATTEMPTS  16
 
 static unsigned int sSeed = 1u;
+static const char *sFirstRejection;
 
 /* --- deterministic noise ----------------------------------------------
    Hash-based rather than a seeded global RNG: chunks must be generatable
@@ -158,6 +161,21 @@ static bool Add(Chunk *c, Rectangle r, SolidKind kind)
 
     c->kinds[c->solidCount] = (unsigned char)kind;
     c->solids[c->solidCount++] = r;
+    return true;
+}
+
+/* Nothing already occupies this space. Checked before committing to a
+   multi-part structure, so it cannot end up built half inside something. */
+static bool AreaClear(const Chunk *c, Rectangle r)
+{
+    for (int i = 0; i < c->solidCount; i++)
+    {
+        if (!(r.x + r.width <= c->solids[i].x ||
+              c->solids[i].x + c->solids[i].width <= r.x ||
+              r.y + r.height <= c->solids[i].y ||
+              c->solids[i].y + c->solids[i].height <= r.y)) return false;
+    }
+
     return true;
 }
 
@@ -495,6 +513,107 @@ static void BuildDebris(Chunk *c, Rand *rnd, float x, float top, float width)
     }
 }
 
+/* --- the sea floor -----------------------------------------------------
+   Slabs stepping between the bathymetry at each boundary, then whatever
+   belongs at that depth: outcrops on the shelf, seamounts on the slope,
+   vents on the plain. */
+
+#define FLOOR_STEPS   6
+#define FLOOR_DEPTH 520.0f
+#define SEA_CEILING 900.0f      /* never build up into the streets */
+
+static void BuildOcean(Chunk *c, Rand *rnd, int index)
+{
+    float x0 = (float)index * CHUNK_WIDTH;
+
+    float leftFloor  = OceanFloorHeight(index);
+    float rightFloor = OceanFloorHeight(index + 1);
+
+    float stepW = CHUNK_WIDTH / (float)FLOOR_STEPS;
+    float shallowest = leftFloor;
+
+    for (int i = 0; i < FLOOR_STEPS; i++)
+    {
+        float t = ((float)i + 0.5f) / (float)FLOOR_STEPS;
+        float y = leftFloor + (rightFloor - leftFloor) * t;
+
+        y += (RandNext(rnd) - 0.5f) * 26.0f;
+        if (y < SEA_CEILING) y = SEA_CEILING;
+        if (y < shallowest) shallowest = y;
+
+        /* Derive both edges the same way, so slab i's right edge is
+           bit-identical to slab i+1's left edge. Using x + width instead
+           drifts by an ulp out at chunk 200, where floats are only good
+           to about a hundredth - and an ulp of overlap is still overlap. */
+        float a = x0 + stepW * (float)i;
+        float b = x0 + stepW * (float)(i + 1);
+
+        Add(c, (Rectangle){ a, y, b - a, FLOOR_DEPTH }, SOLID_ROCK);
+    }
+
+    float depth = shallowest - 578.0f;
+
+    if (depth < 420.0f)
+    {
+        int rocks = 1 + (int)(RandNext(rnd) * 3.0f);
+
+        for (int i = 0; i < rocks; i++)
+        {
+            float rx = x0 + RandRange(rnd, 60.0f, CHUNK_WIDTH - 200.0f);
+            float rh = RandRange(rnd, 40.0f, 120.0f);
+            float rw = RandRange(rnd, 50.0f, 110.0f);
+
+            AddIfClear(c, (Rectangle){ rx, shallowest - rh, rw, rh }, SOLID_ROCK, 4.0f);
+        }
+    }
+
+    /* A seamount, built as two walls with a shaft between them. The shaft
+       is swimmable and the pocket under its cap holds air, which is the
+       only way anything gets below the shelf and back again. */
+    if (depth > 260.0f && RandNext(rnd) < 0.5f)
+    {
+        float mx = x0 + RandRange(rnd, 200.0f, CHUNK_WIDTH - 420.0f);
+        float mh = RandRange(rnd, 220.0f, 460.0f);
+        float shaft = 74.0f;
+        float wall = 60.0f;
+
+        if (shallowest - mh < SEA_CEILING) mh = shallowest - SEA_CEILING;
+
+        if (mh > 150.0f)
+        {
+            float mtop = shallowest - mh;
+            Rectangle footprint = { mx - 4.0f, mtop - 30.0f,
+                                    wall * 2.0f + shaft + 8.0f, mh + 34.0f };
+
+            if (AreaClear(c, footprint))
+            {
+                Add(c, (Rectangle){ mx, mtop, wall, mh }, SOLID_ROCK);
+                Add(c, (Rectangle){ mx + wall + shaft, mtop, wall, mh }, SOLID_ROCK);
+                Add(c, (Rectangle){ mx, mtop - 26.0f, wall * 2.0f + shaft, 26.0f },
+                    SOLID_ROCK);
+
+                if (c->airCount < CHUNK_MAX_AIR)
+                {
+                    c->air[c->airCount++] = (Rectangle){ mx + wall, mtop, shaft, 80.0f };
+                }
+            }
+        }
+    }
+
+    /* The plain: hydrothermal vents. Warm and lit, in water that is
+       neither - the one place worth being this far down. */
+    if (depth > 640.0f && RandNext(rnd) < 0.55f && c->ventCount < CHUNK_MAX_VENTS)
+    {
+        float vx = x0 + RandRange(rnd, 120.0f, CHUNK_WIDTH - 240.0f);
+        float vh = RandRange(rnd, 40.0f, 90.0f);
+
+        if (AddIfClear(c, (Rectangle){ vx, shallowest - vh, 26.0f, vh }, SOLID_ROCK, 8.0f))
+        {
+            c->vents[c->ventCount++] = (Vector2){ vx + 13.0f, shallowest - vh };
+        }
+    }
+}
+
 static void BuildOnce(int index, unsigned int salt, Chunk *out)
 {
     out->index = index;
@@ -503,6 +622,8 @@ static void BuildOnce(int index, unsigned int salt, Chunk *out)
     out->mushroomCount = 0;
     out->weedCount = 0;
     out->decorCount = 0;
+    out->ventCount = 0;
+    out->airCount = 0;
 
     District district = WorldDistrictAt(index);
 
@@ -632,6 +753,9 @@ static void BuildOnce(int index, unsigned int salt, Chunk *out)
         }
     }
 
+    /* --- and the sea underneath all of it ----------------------------- */
+    BuildOcean(out, &rnd, index);
+
     /* --- props, last -------------------------------------------------- */
     float greenery = (district == DISTRICT_CITY) ? 0.18f : 0.55f;
 
@@ -659,6 +783,51 @@ static void BuildOnce(int index, unsigned int salt, Chunk *out)
         }
     }
 }
+
+/* Which rule a chunk fails, or NULL if it passes. Generation rejects
+   silently and retries sixteen times, so without this a broken rule just
+   looks like every chunk quietly falling back to flat ground. */
+const char *WorldChunkRejection(const Chunk *chunk)
+{
+    for (int a = 0; a < chunk->solidCount; a++)
+    {
+        for (int b = a + 1; b < chunk->solidCount; b++)
+        {
+            if (RectsOverlap(chunk->solids[a], chunk->solids[b])) return "overlapping solids";
+        }
+    }
+
+    for (int i = 0; i < chunk->mushroomCount; i++)
+    {
+        if (SupportTopAt(chunk, chunk->mushrooms[i].x, 40.0f) != chunk->mushrooms[i].baseY)
+        {
+            return "unsupported mushroom";
+        }
+    }
+
+    for (int i = 0; i < chunk->treeCount; i++)
+    {
+        if (SupportTopAt(chunk, chunk->trees[i].x, 100.0f) != chunk->trees[i].baseY)
+        {
+            return "unsupported tree";
+        }
+    }
+
+    float dryLine = WeatherMaxWaterY() - 4.0f;
+    bool hasDry = false;
+
+    for (int i = 0; i < chunk->solidCount; i++)
+    {
+        if (chunk->solids[i].y < dryLine) { hasDry = true; break; }
+    }
+
+    if (!hasDry) return "no dry ground above the flood";
+    if (!WorldChunkTraversable(chunk)) return "not crossable";
+
+    return NULL;
+}
+
+const char *WorldLastRejection(void) { return sFirstRejection; }
 
 bool WorldChunkValid(const Chunk *chunk)
 {
@@ -706,6 +875,8 @@ void WorldBuildChunk(int index, Chunk *out)
     for (unsigned int attempt = 0; attempt < MAX_ATTEMPTS; attempt++)
     {
         BuildOnce(index, attempt * 7919u, out);
+
+        if (attempt == 0) sFirstRejection = WorldChunkRejection(out);
 
         if (WorldChunkValid(out))
         {

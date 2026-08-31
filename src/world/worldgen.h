@@ -52,6 +52,8 @@ typedef enum SolidKind {
 #define CHUNK_MAX_MUSHROOMS   10
 #define CHUNK_MAX_WEEDS       14
 #define CHUNK_MAX_DECOR       96
+#define CHUNK_MAX_VENTS        3
+#define CHUNK_MAX_AIR          3
 
 typedef struct Tree {
     float x;            /* trunk centre, world space */
@@ -112,6 +114,14 @@ typedef struct Chunk {
 
     Decor decor[CHUNK_MAX_DECOR];
     int   decorCount;
+
+    /* Hydrothermal vents: light and warmth in water that has neither. */
+    Vector2 vents[CHUNK_MAX_VENTS];
+    int     ventCount;
+
+    /* Air trapped under rock. The only way to breathe past the shelf. */
+    Rectangle air[CHUNK_MAX_AIR];
+    int       airCount;
 } Chunk;
 
 void  WorldSetSeed(unsigned int seed);
@@ -132,6 +142,14 @@ bool  WorldChunkTraversable(const Chunk *chunk);
    through another, and nothing standing on thin air. A candidate that
    fails any of these is thrown away and rerolled. */
 bool  WorldChunkValid(const Chunk *chunk);
+const char *WorldChunkRejection(const Chunk *chunk);
+const char *WorldLastRejection(void);
+
+/* Which rule a chunk fails, or NULL if it passes. Generation rejects
+   silently and retries, so without this a broken rule looks like every
+   chunk quietly falling back to flat ground. */
+const char *WorldChunkRejection(const Chunk *chunk);
+const char *WorldLastRejection(void);
 
 Vector2 WorldSpawnPoint(void);
 

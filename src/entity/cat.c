@@ -146,8 +146,12 @@ void CatFixedUpdate(float dt)
     float midY = sCat.body.pos.y - BodyHeight() * 0.5f;
     sCat.swimming = (midY > waterY);
 
-    /* The head, not the middle: you can swim along the top and breathe. */
-    sCat.submerged = ((sCat.body.pos.y - BodyHeight()) > waterY);
+    /* The head, not the middle: you can swim along the top and breathe.
+       Air trapped under rock counts as a surface, which is the only way
+       anything gets below the shelf and back. */
+    Vector2 head = { sCat.body.pos.x, sCat.body.pos.y - BodyHeight() };
+
+    sCat.submerged = (head.y > waterY) && !TerrainAirAt(head);
 
     if (InputPressed(ACT_JUMP)) sCat.buffer = JUMP_BUFFER;
     if (sCat.buffer > 0.0f) sCat.buffer -= dt;

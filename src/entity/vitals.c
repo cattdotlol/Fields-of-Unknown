@@ -1,6 +1,8 @@
 #include "entity/vitals.h"
 #include "entity/cat.h"
 #include "world/season.h"
+#include "world/ocean.h"
+#include "world/terrain.h"
 #include "world/weather.h"
 
 Vitals gVitals;
@@ -92,8 +94,26 @@ void VitalsUpdate(float dt)
        the cat did, and freezing beat starving to the punch. */
     float wet = swimming ? 1.0f : (rain * 0.55f);
 
-    float loss  = wet * (0.006f + cold * 0.010f);
+    /* Past the thermocline the water is near freezing, and a vent is the
+       only warm thing down there. */
+    float depth = OceanDepthAt(CatPosition().y);
+    float chill = OceanChill(depth);
+
+    bool byVent = false;
+
+    for (int i = 0; i < TerrainVentCount(); i++)
+    {
+        Vector2 v = TerrainVent(i);
+        float dx = v.x - CatPosition().x;
+        float dy = v.y - CatPosition().y;
+
+        if (dx * dx + dy * dy < 150.0f * 150.0f) { byVent = true; break; }
+    }
+
+    float loss  = wet * (0.006f + cold * 0.010f) * (1.0f + chill * 1.8f);
+    if (byVent) loss = 0.0f;
     float regen = (1.0f - wet) * WARMTH_REGEN * SeasonTemperature();
+    if (byVent) regen = WARMTH_REGEN * 2.2f;      /* vents are warm */
 
     gVitals.warmth = Clamp01(gVitals.warmth + (regen - loss) * dt);
 
@@ -109,8 +129,8 @@ void VitalsUpdate(float dt)
         default:         effort = 0.7f; break;
     }
 
-    float chill = 1.0f + (1.0f - gVitals.warmth) * 0.8f;
-    gVitals.hunger = Clamp01(gVitals.hunger - HUNGER_BASE * effort * chill * dt);
+    float shiver = 1.0f + (1.0f - gVitals.warmth) * 0.8f;
+    gVitals.hunger = Clamp01(gVitals.hunger - HUNGER_BASE * effort * shiver * dt);
 
     /* --- stamina ------------------------------------------------------ */
     if (state == CAT_RUN)        gVitals.stamina = Clamp01(gVitals.stamina - STAMINA_RUN * dt);
@@ -138,6 +158,12 @@ void VitalsUpdate(float dt)
     float drain = 0.0f;
 
     if (gVitals.breath <= 0.0f) drain += HEALTH_DROWNING;
+
+    /* Below the crush depth the cat is simply not built for it. */
+    if (depth > OCEAN_CRUSH_DEPTH)
+    {
+        drain += (depth - OCEAN_CRUSH_DEPTH) / 1000.0f * 0.05f;
+    }
     if (gVitals.hunger <= 0.0f) drain += HEALTH_STARVING;
     if (gVitals.warmth <= 0.0f) drain += HEALTH_FREEZING;
 

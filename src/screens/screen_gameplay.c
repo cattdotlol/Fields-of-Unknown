@@ -18,6 +18,7 @@
 #include "world/terrain.h"
 #include "world/worldgen.h"
 #include "world/mushroom.h"
+#include "world/ocean.h"
 #include "world/season.h"
 #include "world/weather.h"
 
@@ -256,6 +257,10 @@ static void DrawDebug(void)
         TextFormat("STATE    %s", StateName(CatCurrentState())),
         TextFormat("NOISE    %.2f", (double)CatNoise()),
         TextFormat("RATS     %d  (%d fleeing)", RatCount(), RatAlarmed()),
+        TextFormat("OCEAN    %s  depth %.0f  light %.2f",
+                   OceanZoneName(OceanZoneAtDepth(OceanDepthAt(CatPosition().y))),
+                   (double)OceanDepthAt(CatPosition().y),
+                   (double)OceanLight(OceanDepthAt(CatPosition().y))),
         TextFormat("WATER    %d jelly  %d shark  %d whale",
                    AquaticCountOf(AQUA_JELLY), AquaticCountOf(AQUA_SHARK),
                    AquaticCountOf(AQUA_WHALE)),
@@ -309,6 +314,12 @@ static void ApplyLighting(void)
     ambient -= WeatherRain() * 0.10f;
     ambient -= (1.0f - SeasonTemperature()) * 0.06f;
 
+    /* Under water, light is whatever survives the depth. Exponential, so
+       the twilight zone really is twilight and the midnight zone is
+       nothing at all. */
+    float depth = OceanDepthAt(CatPosition().y);
+    if (depth > 0.0f) ambient *= OceanLight(depth);
+
     /* Lightning lights everything, briefly. */
     ambient += WeatherFlash() * 0.45f;
 
@@ -355,6 +366,17 @@ static void ApplyLighting(void)
 
         LightingAddLight(sCam, AquaticPosition(i), 130.0f,
                          (Color){ 150, 130, 226, 255 }, glow * 0.45f);
+    }
+
+    /* Vents: the only warm light on the sea floor. */
+    for (int i = 0; i < TerrainVentCount(); i++)
+    {
+        Vector2 v = TerrainVent(i);
+        if (v.x < viewL.x - 200.0f || v.x > viewR.x + 200.0f) continue;
+
+        float flicker = 0.75f + 0.25f * sinf((float)GetTime() * 2.3f + v.x * 0.01f);
+
+        LightingAddLight(sCam, v, 260.0f, (Color){ 236, 128, 70, 255 }, 0.55f * flicker);
     }
 
     /* And the thing that is looking for you. */

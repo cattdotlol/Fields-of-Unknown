@@ -85,6 +85,47 @@ int TerrainSolidKind(int index)
     return (int)sFlatKind[index];
 }
 
+int TerrainVentCount(void)
+{
+    int n = 0;
+    for (int c = 0; c < TERRAIN_LOADED_CHUNKS; c++)
+    {
+        if (sChunks[c].active) n += sChunks[c].ventCount;
+    }
+    return n;
+}
+
+Vector2 TerrainVent(int index)
+{
+    for (int c = 0; c < TERRAIN_LOADED_CHUNKS; c++)
+    {
+        if (!sChunks[c].active) continue;
+
+        if (index < sChunks[c].ventCount) return sChunks[c].vents[index];
+        index -= sChunks[c].ventCount;
+    }
+
+    return (Vector2){ 0.0f, 0.0f };
+}
+
+bool TerrainAirAt(Vector2 point)
+{
+    for (int c = 0; c < TERRAIN_LOADED_CHUNKS; c++)
+    {
+        if (!sChunks[c].active) continue;
+
+        for (int i = 0; i < sChunks[c].airCount; i++)
+        {
+            Rectangle r = sChunks[c].air[i];
+
+            if (point.x >= r.x && point.x <= r.x + r.width &&
+                point.y >= r.y && point.y <= r.y + r.height) return true;
+        }
+    }
+
+    return false;
+}
+
 bool TerrainOverlaps(Rectangle box)
 {
     for (int i = 0; i < sFlatCount; i++)
@@ -418,6 +459,47 @@ void TerrainDraw(float left, float right, Rectangle focus)
                     break;
 
                 default: break;
+            }
+        }
+    }
+
+    /* Trapped air reads as a surface from below. */
+    for (int c = 0; c < TERRAIN_LOADED_CHUNKS; c++)
+    {
+        if (!sChunks[c].active) continue;
+
+        for (int i = 0; i < sChunks[c].airCount; i++)
+        {
+            Rectangle r = sChunks[c].air[i];
+            if (r.x + r.width < left || r.x > right) continue;
+
+            DrawRectangleRec(r, (Color){ 30, 44, 52, 120 });
+            DrawRectangle((int)r.x, (int)(r.y + r.height - 2.0f), (int)r.width, 2,
+                          (Color){ 150, 200, 214, 200 });
+        }
+    }
+
+    /* Vents: a chimney mouth, and what comes out of it. */
+    for (int c = 0; c < TERRAIN_LOADED_CHUNKS; c++)
+    {
+        if (!sChunks[c].active) continue;
+
+        for (int i = 0; i < sChunks[c].ventCount; i++)
+        {
+            Vector2 v = sChunks[c].vents[i];
+            if (v.x < left - 60.0f || v.x > right + 60.0f) continue;
+
+            DrawRectangle((int)(v.x - 9.0f), (int)v.y, 18, 5, (Color){ 62, 40, 34, 255 });
+
+            for (int p = 0; p < 8; p++)
+            {
+                float t = fmodf((float)GetTime() * 0.35f + (float)p * 0.13f, 1.0f);
+                float px = v.x + sinf(t * 5.0f + (float)p) * (6.0f + t * 16.0f);
+                float py = v.y - t * 150.0f;
+                float side = 3.0f + t * 3.0f;
+
+                DrawRectangleRec((Rectangle){ px, py, side, side },
+                                 Fade((Color){ 196, 150, 128, 255 }, (1.0f - t) * 0.40f));
             }
         }
     }

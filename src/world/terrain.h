@@ -17,6 +17,12 @@ void TerrainStream(float centreX);
 int       TerrainCount(void);
 Rectangle TerrainSolid(int index);
 int       TerrainSolidKind(int index);
+
+/* Hydrothermal vents in the loaded window, and whether a point is inside
+   a pocket of trapped air. */
+int     TerrainVentCount(void);
+Vector2 TerrainVent(int index);
+bool    TerrainAirAt(Vector2 point);
 bool      TerrainOverlaps(Rectangle box);
 
 int  TerrainLoadedChunks(void);
