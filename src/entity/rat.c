@@ -409,7 +409,8 @@ static void UpdateOne(Rat *r, float dt, Vector2 catPos, float catNoise)
     BodyApplyGravity(&r->body, GRAVITY, MAX_FALL, dt);
     BodyMove(&r->body, dt);
 
-    r->stride += fabsf(r->body.vel.x) * dt * 0.09f;
+    /* Same fix as the cat: a fleeing rat was flickering at 13Hz. */
+    r->stride += fabsf(r->body.vel.x) * dt * 0.030f;
 }
 
 void RatsFixedUpdate(float dt)

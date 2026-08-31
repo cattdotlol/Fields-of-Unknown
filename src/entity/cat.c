@@ -28,13 +28,22 @@
 #define COYOTE_TIME     0.10f
 #define JUMP_BUFFER     0.12f
 
+/* Bob cycles per unit travelled. At 0.10 a sprint bobbed twenty times a
+   second, which reads as vibration rather than running. A gait is two to
+   four steps a second. */
+#define STRIDE_RATE     0.018f
+
 /* Water: cats can swim, but they are slow, loud and hate it. */
 #define SWIM_ACCEL    460.0f
 #define SWIM_MAX       74.0f
 #define SWIM_SINK     240.0f
 #define SWIM_BUOYANCY 900.0f
 #define SWIM_DRAG       2.4f
-#define SWIM_SURFACE   10.0f    /* how deep the cat floats */
+/* Buoyancy settles the cat at SWIM_SINK / (SWIM_BUOYANCY * 0.02) below
+   the surface, which is 13.3. The kick window has to be deeper than that
+   or it can never fire and the water is a trap - which it was. */
+#define SWIM_SURFACE   28.0f
+#define SWIM_KICK       0.88f
 
 typedef struct Cat {
     Body     body;
@@ -154,7 +163,7 @@ void CatFixedUpdate(float dt)
         /* Kicking off at the surface, to get back onto a ledge. */
         if (sCat.buffer > 0.0f && depth < SWIM_SURFACE)
         {
-            sCat.body.vel.y = JUMP_VELOCITY * 0.62f;
+            sCat.body.vel.y = JUMP_VELOCITY * SWIM_KICK;
             sCat.buffer = 0.0f;
         }
 
@@ -224,7 +233,7 @@ void CatFixedUpdate(float dt)
     }
 
     /* Stride drives the bob; it only advances when the cat does. */
-    sCat.stride += fabsf(sCat.body.vel.x) * dt * 0.10f;
+    sCat.stride += fabsf(sCat.body.vel.x) * dt * STRIDE_RATE;
 
     if (sCat.state == CAT_IDLE) sCat.stillFor += dt;
     else                        sCat.stillFor = 0.0f;
@@ -260,6 +269,17 @@ void CatShove(float vx, float vy)
     sCat.body.vel.y = vy;
     sCat.body.grounded = false;
 }
+
+/* Exposed so the tests can check the tuning rather than restate it. */
+float CatStrideRate(void)   { return STRIDE_RATE; }
+float CatRunSpeed(void)     { return SPEED_RUN; }
+
+float CatSwimRestDepth(void)
+{
+    return SWIM_SINK / (SWIM_BUOYANCY * 0.02f);
+}
+
+float CatSwimKickWindow(void) { return SWIM_SURFACE; }
 
 float CatMaxJumpHeight(void)
 {

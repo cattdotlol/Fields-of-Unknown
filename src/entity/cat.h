@@ -39,6 +39,12 @@ float CatNoise(void);
 void CatShove(float vx, float vy);
 
 float CatMaxJumpHeight(void);
+
+/* Tuning, exposed so it can be asserted instead of drifting. */
+float CatStrideRate(void);
+float CatRunSpeed(void);
+float CatSwimRestDepth(void);    /* where buoyancy parks the cat  */
+float CatSwimKickWindow(void);   /* how deep it can still push off */
 float CatMaxRunJumpDistance(void);
 
 #endif /* ENTITY_CAT_H */

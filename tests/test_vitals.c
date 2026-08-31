@@ -236,6 +236,32 @@ static void TestWeatherIsReproducible(void)
     Check("the weather actually changes over the run", varies, true);
 }
 
+/* Two tunings that were wrong in ways only arithmetic catches. */
+static void TestMovementTuning(void)
+{
+    puts("movement");
+
+    /* The bob is driven by distance travelled, so its frequency scales
+       with speed. At the old rate a sprint bobbed 20 times a second. */
+    float sprintHz = CatRunSpeed() * CatStrideRate();
+
+    printf("    gait at a sprint: %.1f cycles/second\n", (double)sprintHz);
+
+    Check("a sprint does not flicker", sprintHz < 6.0f, true);
+    Check("but the legs do move", sprintHz > 1.5f, true);
+
+    /* Buoyancy parks the cat at a fixed depth. If the kick window is
+       shallower than that, it can never fire and water is a trap. */
+    float rest = CatSwimRestDepth();
+    float window = CatSwimKickWindow();
+
+    printf("    buoyancy rests at %.1f deep, kick reaches %.0f\n",
+           (double)rest, (double)window);
+
+    Check("the cat can push off from where it floats", rest < window, true);
+    Check("with room to spare", window - rest > 5.0f, true);
+}
+
 void SuiteVitals(void)
 {
     TestHungerIsTheClock();
@@ -246,4 +272,5 @@ void SuiteVitals(void)
     TestStamina();
     TestSeasonsTurn();
     TestWeatherIsReproducible();
+    TestMovementTuning();
 }
