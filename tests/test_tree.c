@@ -131,28 +131,64 @@ static void TestSpeciesFollowTheWater(void)
     SeasonInit();
     WeatherInit(3u);
 
+    float dry = WeatherBaseWaterY();
     int wetLovers = 0, dryLovers = 0;
 
     for (unsigned int v = 0; v < 3000; v++)
     {
         Tree wet = Make(v, false);
-        wet.baseY = WeatherMaxWaterY() + 40.0f;        /* under the flood */
+        wet.baseY = dry + 10.0f;                 /* ankle deep */
 
         TreeSpecies s = TreeSpeciesOf(&wet);
         if (s == TREE_MANGROVE || s == TREE_WILLOW || s == TREE_CYPRESS) wetLovers++;
 
-        Tree dry = Make(v, false);
-        dry.baseY = WeatherMaxWaterY() - 260.0f;       /* high and drained */
+        Tree high = Make(v, false);
+        high.baseY = dry - 90.0f;                /* high and drained */
 
-        TreeSpecies d = TreeSpeciesOf(&dry);
+        TreeSpecies d = TreeSpeciesOf(&high);
         if (d == TREE_PINE || d == TREE_BIRCH || d == TREE_OAK || d == TREE_POPLAR) dryLovers++;
     }
 
-    printf("    of 3000: %d wet-ground trees are water species, "
-           "%d dry-ground are not\n", wetLovers, dryLovers);
+    printf("    of 3000: %d in the shallows are water species, "
+           "%d on high ground are not\n", wetLovers, dryLovers);
 
-    Check("flooded ground grows water species", wetLovers == 3000, true);
-    Check("drained ground grows the others", dryLovers == 3000, true);
+    Check("only water species stand in water", wetLovers == 3000, true);
+    Check("high ground grows the others", dryLovers == 3000, true);
+}
+
+/* The world floods, but it must not drown its own forest: roots go under,
+   crowns stay in the air. */
+static void TestNothingDrowns(void)
+{
+    SeasonInit();
+    WeatherInit(3u);
+    WorldSetSeed(20260831u);
+
+    int trees = 0, rootedTooDeep = 0, crownsUnder = 0;
+
+    for (int i = -120; i <= 120; i++)
+    {
+        Chunk c;
+        WorldBuildChunk(i, &c);
+
+        for (int t = 0; t < c.treeCount; t++)
+        {
+            const Tree *tr = &c.trees[t];
+            trees++;
+
+            /* Nothing takes root on permanently drowned ground. */
+            if (tr->baseY > WeatherBaseWaterY() + 20.0f) rootedTooDeep++;
+
+            /* Even at the flood peak the crown clears the surface. */
+            if (tr->baseY - tr->height > WeatherMaxWaterY()) crownsUnder++;
+        }
+    }
+
+    printf("    %d trees: %d rooted on drowned ground, %d crowns under at flood\n",
+           trees, rootedTooDeep, crownsUnder);
+
+    Check("no tree roots on drowned ground", rootedTooDeep == 0, true);
+    Check("no crown goes under at the flood peak", crownsUnder == 0, true);
 }
 
 /* A mangrove is held out of the water on stilt roots. */
@@ -164,7 +200,7 @@ static void TestMangrovesHaveRoots(void)
     for (unsigned int v = 0; v < 60000; v++)
     {
         Tree t = Make(v, false);
-        t.baseY = WeatherMaxWaterY() + 40.0f;
+        t.baseY = WeatherBaseWaterY() + 10.0f;
 
         if (TreeSpeciesOf(&t) != TREE_MANGROVE) continue;
 
@@ -214,6 +250,7 @@ void SuiteTree(void)
     TestBranchesThinCorrectly();
     TestSpeciesDiffer();
     TestSpeciesFollowTheWater();
+    TestNothingDrowns();
     TestMangrovesHaveRoots();
     TestDeterminism();
 }

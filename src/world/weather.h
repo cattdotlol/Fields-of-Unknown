@@ -27,6 +27,10 @@ float WeatherWaterY(void);      /* world y of the surface (smaller = higher) */
    generation needs this to guarantee a dry route through every chunk. */
 float WeatherMaxWaterY(void);
 
+/* Where the water sits in fair weather. Fixed, so things that must not
+   change with the season - like what species a tree is - can key off it. */
+float WeatherBaseWaterY(void);
+
 /* 1 = fully covered, 0 = fully exposed. Stealth reads these. */
 float WeatherScentMask(void);
 float WeatherNoiseMask(void);

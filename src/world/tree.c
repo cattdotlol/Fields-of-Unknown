@@ -71,30 +71,31 @@ TreeSpecies TreeSpeciesOf(const Tree *tree)
 {
     if (tree->dead) return TREE_GNARLED;
 
-    /* 0 is well above the flood, 1 is at or under it. */
-    float flood = WeatherMaxWaterY();
-    float wet = (tree->baseY - (flood - 90.0f)) / 120.0f;
+    /* Measured against the fair-weather water line, not the flood peak:
+       a tree can't change species when the water rises. 0 is high ground,
+       1 is the shoreline. */
+    float dry = WeatherBaseWaterY();
+    float wet = (tree->baseY - (dry - 64.0f)) / 64.0f;
 
     if (wet < 0.0f) wet = 0.0f;
     if (wet > 1.0f) wet = 1.0f;
 
     unsigned int roll = Hash(tree->variant, 77u) % 100u;
 
-    if (wet > 0.62f)
+    if (wet > 0.68f)
     {
-        /* Standing water. */
+        /* Standing water. Only these three manage it. */
         if (roll < 40u) return TREE_MANGROVE;
-        if (roll < 75u) return TREE_WILLOW;
+        if (roll < 74u) return TREE_WILLOW;
         return TREE_CYPRESS;
     }
 
-    if (wet > 0.28f)
+    if (wet > 0.38f)
     {
-        /* Damp ground. */
-        if (roll < 30u) return TREE_WILLOW;
-        if (roll < 55u) return TREE_OAK;
-        if (roll < 80u) return TREE_POPLAR;
-        return TREE_CYPRESS;
+        /* Damp ground - a riverbank, not a swamp. */
+        if (roll < 34u) return TREE_WILLOW;
+        if (roll < 66u) return TREE_OAK;
+        return TREE_POPLAR;
     }
 
     /* Dry and drained. */

@@ -295,6 +295,11 @@ static void AddTree(Chunk *c, Rand *rnd, float x)
     float support = SupportTopAt(c, x, 100.0f);
     if (support < 0.0f) return;
 
+    /* Ground that stays under even in fair weather is drowned; nothing
+       takes root there. Roots in the shallows are fine - that is what the
+       mangroves and cypress are for. */
+    if (support > WeatherBaseWaterY() + 20.0f) return;
+
     Tree *t = &c->trees[c->treeCount++];
 
     t->x = x;
