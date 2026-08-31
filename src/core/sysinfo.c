@@ -15,6 +15,12 @@
     #define GL_VENDOR   0x1F00
     #define GL_RENDERER 0x1F01
     #define GL_VERSION  0x1F02
+#elif defined(__APPLE__)
+    /* Apple shipped OpenGL as deprecated years ago; it still works, and
+       raylib still uses it. This just quiets the header. */
+    #define GL_SILENCE_DEPRECATION
+    #include <OpenGL/gl.h>
+    #include <sys/sysctl.h>
 #else
     #include <GL/gl.h>
 #endif
@@ -60,6 +66,38 @@ static void ReadCpu(void)
 static void ReadMemory(void)
 {
     SysWin32Memory(gSysInfo.memory, (int)sizeof(gSysInfo.memory));
+}
+
+#elif defined(__APPLE__)
+
+static void ReadCpu(void)
+{
+    size_t size = sizeof(gSysInfo.cpu);
+
+    if (sysctlbyname("machdep.cpu.brand_string", gSysInfo.cpu, &size, NULL, 0) != 0)
+    {
+        gSysInfo.cpu[0] = '\0';
+    }
+
+    int logical = 0;
+    size = sizeof(logical);
+
+    if (sysctlbyname("hw.logicalcpu", &logical, &size, NULL, 0) == 0)
+    {
+        gSysInfo.cpuThreads = logical;
+    }
+}
+
+static void ReadMemory(void)
+{
+    unsigned long long bytes = 0;
+    size_t size = sizeof(bytes);
+
+    if (sysctlbyname("hw.memsize", &bytes, &size, NULL, 0) == 0)
+    {
+        snprintf(gSysInfo.memory, sizeof(gSysInfo.memory), "%.1f GB",
+                 (double)bytes / (1024.0 * 1024.0 * 1024.0));
+    }
 }
 
 #elif defined(__linux__)
@@ -121,7 +159,7 @@ void SysInfoGather(void)
     CopyInto(gSysInfo.cpu, sizeof(gSysInfo.cpu), NULL, "unknown");
     CopyInto(gSysInfo.memory, sizeof(gSysInfo.memory), NULL, "unknown");
 
-#if defined(_WIN32) || defined(__linux__)
+#if defined(_WIN32) || defined(__APPLE__) || defined(__linux__)
     gSysInfo.cpu[0] = '\0';
     gSysInfo.cpuThreads = 0;
     ReadCpu();

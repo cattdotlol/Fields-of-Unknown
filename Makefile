@@ -10,7 +10,21 @@ DEPS := $(OBJS:.o=.d)
 # against an older glibc. Defaults to whatever is installed locally.
 RAYLIB_CFLAGS ?= $(shell pkg-config --cflags raylib)
 RAYLIB_LIBS   ?= $(shell pkg-config --libs raylib)
-SYS_LIBS      ?= -lGL -lm
+
+# macOS has no libGL and dyld does not understand $ORIGIN, so the system
+# libraries and the bundled-library path differ per platform.
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S),Darwin)
+  SYS_LIBS   ?= -framework CoreVideo -framework IOKit -framework Cocoa \
+                -framework OpenGL -lm
+  RPATH_FLAG := -Wl,-rpath,@executable_path/lib
+  STRIP_FLAG :=
+else
+  SYS_LIBS   ?= -lGL -lm
+  RPATH_FLAG := -Wl,-rpath,'$$ORIGIN/lib'
+  STRIP_FLAG := -s
+endif
 
 CFLAGS := -std=c11 -Wall -Wextra -Wpedantic -I$(SRCDIR) -MMD -MP $(RAYLIB_CFLAGS)
 LDLIBS := $(RAYLIB_LIBS) $(SYS_LIBS)
@@ -27,7 +41,7 @@ release: CFLAGS  += -O2 -DNDEBUG
 # $ORIGIN/lib lets a bundled raylib win over the system one, so the
 # machine running this does not need raylib installed. Falls back to the
 # system copy when that directory is absent.
-release: LDFLAGS += -Wl,-rpath,'$$ORIGIN/lib' -s
+release: LDFLAGS += $(RPATH_FLAG) $(STRIP_FLAG)
 release: $(BUILD)/$(NAME)
 
 $(BUILD)/$(NAME): $(OBJS)
@@ -137,4 +151,12 @@ clean:
 
 -include $(DEPS)
 
-.PHONY: debug asan release run test dist dist-src windows dist-windows clean
+.PHONY: debug asan release run test dist dist-src windows dist-windows vars clean
+
+# Prints the platform-dependent flags. Used by CI and when debugging a
+# cross build; harmless otherwise.
+vars:
+	@echo 'uname      $(UNAME_S)'
+	@echo 'SYS_LIBS   $(SYS_LIBS)'
+	@echo 'RPATH_FLAG $(RPATH_FLAG)'
+	@echo 'STRIP_FLAG $(STRIP_FLAG)' 

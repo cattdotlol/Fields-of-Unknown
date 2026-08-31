@@ -21,7 +21,10 @@ make run
 ```
 
 Other targets: `release`, `test`, `windows` (needs `mingw64-gcc`),
-`dist`, `dist-windows`.
+`dist`, `dist-windows`, `vars`.
+
+Linux, macOS and Windows builds run on every push; see Actions for
+artifacts.
 
 Linux binaries do not travel between distributions — glibc versions only
 resolve forward. Build it where you intend to play it, or send someone
