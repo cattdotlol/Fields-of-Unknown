@@ -2,6 +2,7 @@
 #include "world/weather.h"
 #include "world/worldgen.h"
 #include "world/season.h"
+#include "world/tree.h"
 #include "world/mushroom.h"
 #include "world/worldgen.h"
 
@@ -170,64 +171,71 @@ static float TreeRand(unsigned int v, unsigned int i)
 
 static void DrawTree(const Tree *t)
 {
-    Color bark   = (Color){ 22, 20, 26, 255 };
-    Color barkLo = (Color){ 14, 13, 18, 255 };
-    Color leaf, leafHi;
-    SeasonFoliage(&leaf, &leafHi);
-    Color alien  = (Color){ 58, 32, 72, 255 };
+    TreeBranch branches[TREE_MAX_BRANCHES];
+    int count = TreeBuild(t, branches, TREE_MAX_BRANCHES);
 
-    /* Bare either because this tree is dead, or because it is winter. */
+    Color bark   = (Color){ 30, 26, 30, 255 };
+    Color barkLo = (Color){ 19, 17, 20, 255 };
+
+    Color leaf, leafHigh;
+    SeasonFoliage(&leaf, &leafHigh);
+
     bool bare = t->dead || (TreeRand(t->variant, 999u) < SeasonBareness());
 
-    float topY = t->baseY - t->height;
-
-    /* Trunk, leaning slightly by variant so a row of them is not a fence. */
-    float lean = (TreeRand(t->variant, 0) - 0.5f) * t->height * 0.12f;
-
-    for (float y = t->baseY; y > topY; y -= 4.0f)
+    /* Branches first, drawn as squares along each segment so they keep
+       the same chunky grain as everything else. */
+    for (int i = 0; i < count; i++)
     {
-        float f = (t->baseY - y) / t->height;
-        float w = 12.0f * (1.0f - f * 0.55f);
-        float x = t->x + lean * f;
+        TreeBranch *b = &branches[i];
 
-        DrawRectangleRec((Rectangle){ x - w * 0.5f, y - 4.0f, w, 4.0f },
-                         (f > 0.5f) ? bark : barkLo);
-    }
+        float dx = b->to.x - b->from.x;
+        float dy = b->to.y - b->from.y;
+        float len = sqrtf(dx * dx + dy * dy);
+        if (len < 0.5f) continue;
 
-    /* Branches. */
-    int branches = 2 + (int)(TreeRand(t->variant, 1) * 3.0f);
-    for (int b = 0; b < branches; b++)
-    {
-        float f = 0.45f + TreeRand(t->variant, 10u + (unsigned int)b) * 0.5f;
-        float dir = (TreeRand(t->variant, 20u + (unsigned int)b) < 0.5f) ? -1.0f : 1.0f;
-        float len = t->spread * (0.5f + TreeRand(t->variant, 30u + (unsigned int)b) * 0.7f);
+        float thick = b->thickness;
+        if (thick < 2.0f) thick = 2.0f;
 
-        float y = t->baseY - t->height * f;
-        float x = t->x + lean * f;
+        float step = (thick > 5.0f) ? 3.0f : 4.0f;
 
-        for (float s = 0.0f; s < len; s += 4.0f)
+        for (float d = 0.0f; d <= len; d += step)
         {
-            DrawRectangleRec((Rectangle){ x + dir * s, y - s * 0.45f, 5.0f, 5.0f }, bark);
+            float f = d / len;
+
+            /* Taper along the segment, the way a real branch does. */
+            float w = thick * (1.0f - f * 0.25f);
+
+            DrawRectangleRec((Rectangle){ b->from.x + dx * f - w * 0.5f,
+                                          b->from.y + dy * f - w * 0.5f, w, w },
+                             (b->depth < 2) ? bark : barkLo);
         }
     }
 
     if (bare) return;
 
-    /* Canopy: clumps, not a circle. */
-    int clumps = 5 + (int)(TreeRand(t->variant, 2) * 5.0f);
-    for (int i = 0; i < clumps; i++)
+    /* Foliage in clumps at the branch tips rather than one blob on top. */
+    for (int i = 0; i < count; i++)
     {
-        unsigned int k = 40u + (unsigned int)i;
-        float ox = (TreeRand(t->variant, k) - 0.5f) * t->spread * 2.0f;
-        float oy = (TreeRand(t->variant, k + 100u) - 0.5f) * t->spread * 1.1f;
-        float r  = t->spread * (0.35f + TreeRand(t->variant, k + 200u) * 0.45f);
+        if (!branches[i].tip) continue;
 
-        Color c = leaf;
-        if (TreeRand(t->variant, k + 300u) > 0.78f) c = alien;
-        else if (TreeRand(t->variant, k + 400u) > 0.6f) c = leafHi;
+        float cx = branches[i].to.x;
+        float cy = branches[i].to.y;
 
-        DrawRectangleRec((Rectangle){ t->x + lean + ox - r, topY + oy - r * 0.7f,
-                                      r * 2.0f, r * 1.4f }, c);
+        int clumps = 2 + (int)(TreeRand(t->variant, (unsigned int)i) * 3.0f);
+
+        for (int k = 0; k < clumps; k++)
+        {
+            unsigned int salt = (unsigned int)(i * 8 + k);
+
+            float ox = (TreeRand(t->variant, salt) - 0.5f) * 22.0f;
+            float oy = (TreeRand(t->variant, salt + 300u) - 0.5f) * 18.0f;
+            float r = 5.0f + TreeRand(t->variant, salt + 600u) * 6.0f;
+
+            Color c = (TreeRand(t->variant, salt + 900u) > 0.55f) ? leafHigh : leaf;
+
+            DrawRectangleRec((Rectangle){ cx + ox - r, cy + oy - r * 0.75f,
+                                          r * 2.0f, r * 1.5f }, c);
+        }
     }
 }
 

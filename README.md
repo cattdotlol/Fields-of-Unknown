@@ -61,6 +61,16 @@ Rats hear rather than see. A sprint clears the street; a crouch gets you
 close. Rain masks noise but raises the water, which drowns the ground
 route and pushes you up onto the ledges.
 
+The sea under the flooded streets is modelled on a real one: light falls
+off exponentially with depth, so it has zones rather than a gradient;
+temperature drops through a thermocline; pressure crushes past 1500 units
+down. Air trapped under seamounts is the only way past the shelf and back,
+and hydrothermal vents are the one warm, lit thing on the floor.
+
+Trees grow recursively under botanical rules — da Vinci's branching law,
+apical dominance, gravitropism — so species are a pair of numbers rather
+than four hand-drawn shapes.
+
 Lights cast real shadows: every light rays past the corners of nearby
 solids, so a cave is lit by what you brought into it. The cat sees in the
 dark, apartment windows do not, and the thing hunting you glows.

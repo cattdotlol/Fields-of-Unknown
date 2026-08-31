@@ -13,5 +13,6 @@ void SuiteRat(void);
 void SuiteStalker(void);
 void SuitePhysics(void);
 void SuiteDistrict(void);
+void SuiteTree(void);
 
 #endif /* TESTS_H */
