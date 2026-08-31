@@ -324,6 +324,43 @@ void TerrainDraw(float left, float right, Rectangle focus)
         }
     }
 
+    /* Seaweed, but only the part that is actually under water. */
+    float water = WeatherWaterY();
+    float t = (float)GetTime();
+
+    for (int c = 0; c < TERRAIN_LOADED_CHUNKS; c++)
+    {
+        if (!sChunks[c].active) continue;
+
+        for (int i = 0; i < sChunks[c].weedCount; i++)
+        {
+            const Weed *weed = &sChunks[c].weeds[i];
+
+            if (weed->x < left - 40.0f || weed->x > right + 40.0f) continue;
+            if (weed->baseY < water) continue;          /* still dry */
+
+            int blades = 3 + (int)(weed->variant % 3u);
+
+            for (int b = 0; b < blades; b++)
+            {
+                float ox = ((float)b - (float)blades * 0.5f) * 5.0f;
+                float lean = (float)((weed->variant >> (b * 3)) & 7u) * 0.2f;
+
+                for (float d = 0.0f; d < weed->height; d += 4.0f)
+                {
+                    float top = weed->baseY - d;
+                    if (top < water) break;              /* not above the surface */
+
+                    float sway = sinf(t * 0.9f + d * 0.05f + lean + (float)b) * (d * 0.14f);
+                    float shade = 0.45f + (d / weed->height) * 0.4f;
+
+                    DrawRectangleRec((Rectangle){ weed->x + ox + sway, top - 4.0f, 3.0f, 4.0f },
+                                     Fade((Color){ 38, 96, 66, 255 }, shade));
+                }
+            }
+        }
+    }
+
     /* Mushrooms last, so they sit on top of the ground they grow from. */
     for (int c = 0; c < TERRAIN_LOADED_CHUNKS; c++)
     {

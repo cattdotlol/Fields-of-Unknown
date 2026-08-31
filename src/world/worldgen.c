@@ -238,6 +238,26 @@ static void AddMushrooms(Chunk *c, Rand *rnd, float x, int count)
     }
 }
 
+static void AddWeeds(Chunk *c, Rand *rnd, float x, int count)
+{
+    for (int i = 0; i < count; i++)
+    {
+        if (c->weedCount >= CHUNK_MAX_WEEDS) return;
+
+        float wx = x + RandRange(rnd, -70.0f, 70.0f);
+        float support = SupportTopAt(c, wx, 40.0f);
+
+        if (support < 0.0f) continue;
+
+        Weed *w = &c->weeds[c->weedCount++];
+
+        w->x = wx;
+        w->baseY = support;
+        w->height = RandRange(rnd, 34.0f, 96.0f);
+        w->variant = (unsigned int)(RandNext(rnd) * 4096.0f);
+    }
+}
+
 /* Trees want proper ground, not a pipe. */
 static void AddTree(Chunk *c, Rand *rnd, float x)
 {
@@ -384,6 +404,7 @@ static void BuildOnce(int index, unsigned int salt, Chunk *out)
     out->solidCount = 0;
     out->treeCount = 0;
     out->mushroomCount = 0;
+    out->weedCount = 0;
 
     District district = WorldDistrictAt(index);
 
@@ -531,6 +552,13 @@ static void BuildOnce(int index, unsigned int salt, Chunk *out)
             AddMushrooms(out, &rnd, centre + RandRange(&rnd, -spread, spread),
                          1 + (int)(RandNext(&rnd) * 3.0f));
         }
+
+        /* Weed grows on the low ground, which is the ground that floods. */
+        if (segs[i].top > 542.0f && RandNext(&rnd) < 0.75f)
+        {
+            AddWeeds(out, &rnd, centre + RandRange(&rnd, -spread, spread),
+                     2 + (int)(RandNext(&rnd) * 4.0f));
+        }
     }
 }
 
@@ -593,6 +621,7 @@ void WorldBuildChunk(int index, Chunk *out)
     out->solidCount = 0;
     out->treeCount = 0;
     out->mushroomCount = 0;
+    out->weedCount = 0;
 
     float x0 = (float)index * CHUNK_WIDTH;
     float top = WorldEdgeHeight(index);

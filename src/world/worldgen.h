@@ -50,6 +50,7 @@ typedef enum SolidKind {
     SOLID_KIND_COUNT
 } SolidKind;
 #define CHUNK_MAX_MUSHROOMS   10
+#define CHUNK_MAX_WEEDS       14
 
 typedef struct Tree {
     float x;            /* trunk centre, world space */
@@ -59,6 +60,15 @@ typedef struct Tree {
     unsigned int variant;
     bool  dead;         /* bare, no canopy */
 } Tree;
+
+/* Grows on the ground and is only visible once the flood reaches it, so
+   a wet season turns the streets into a seabed. */
+typedef struct Weed {
+    float x;
+    float baseY;
+    float height;
+    unsigned int variant;
+} Weed;
 
 typedef struct Chunk {
     int   index;
@@ -73,6 +83,9 @@ typedef struct Chunk {
 
     Mushroom mushrooms[CHUNK_MAX_MUSHROOMS];
     int   mushroomCount;
+
+    Weed  weeds[CHUNK_MAX_WEEDS];
+    int   weedCount;
 } Chunk;
 
 void  WorldSetSeed(unsigned int seed);

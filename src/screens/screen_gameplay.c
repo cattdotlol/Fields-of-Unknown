@@ -5,6 +5,7 @@
 #include "core/devtools.h"
 #include "core/settings.h"
 #include "core/input.h"
+#include "entity/aquatic.h"
 #include "entity/cat.h"
 #include "entity/rat.h"
 #include "entity/stalker.h"
@@ -61,6 +62,7 @@ static void RestartRun(void)
     MushroomClearHarvests();
     RatsReset();
     StalkersReset();
+    AquaticReset();
 
     sCamNow = CatPosition();
     sCamNow.y -= 24.0f;
@@ -170,6 +172,7 @@ static void FixedUpdate(float dt)
     sLastHealth = gVitals.health;
     RatsFixedUpdate(dt);
     StalkersFixedUpdate(dt);
+    AquaticFixedUpdate(dt);
 
     /* Eating is the only way hunger goes back up. What a species does is
        not written down anywhere - you find out by trying it. */
@@ -253,6 +256,9 @@ static void DrawDebug(void)
         TextFormat("STATE    %s", StateName(CatCurrentState())),
         TextFormat("NOISE    %.2f", (double)CatNoise()),
         TextFormat("RATS     %d  (%d fleeing)", RatCount(), RatAlarmed()),
+        TextFormat("WATER    %d jelly  %d shark  %d whale",
+                   AquaticCountOf(AQUA_JELLY), AquaticCountOf(AQUA_SHARK),
+                   AquaticCountOf(AQUA_WHALE)),
         TextFormat("STALKERS %d  (%d hunting)  %.0f away", StalkerCount(),
                    StalkerHunting(), (double)StalkerNearestDistance()),
         TextFormat("SCENT M. %.2f", (double)WeatherScentMask()),
@@ -341,6 +347,16 @@ static void ApplyLighting(void)
         }
     }
 
+    /* Jellyfish are the only light down there. */
+    for (int i = 0; i < AQUATIC_MAX; i++)
+    {
+        float glow = AquaticGlow(i);
+        if (glow <= 0.01f) continue;
+
+        LightingAddLight(sCam, AquaticPosition(i), 130.0f,
+                         (Color){ 150, 130, 226, 255 }, glow * 0.45f);
+    }
+
     /* And the thing that is looking for you. */
     for (int i = 0; i < STALKER_MAX; i++)
     {
@@ -368,6 +384,7 @@ static void Draw(void)
 
     BeginMode2D(sCam);
         TerrainDraw(topLeft.x, botRight.x, CatBounds());
+        AquaticDraw(AppRenderAlpha(), topLeft.x, botRight.x);
         RatsDraw(AppRenderAlpha(), topLeft.x, botRight.x);
         StalkersDraw(AppRenderAlpha(), topLeft.x, botRight.x);
         CatDraw(AppRenderAlpha());
