@@ -121,6 +121,31 @@ static bool Add(Chunk *c, Rectangle r)
     return true;
 }
 
+/* Mushrooms cluster: finding one should suggest looking around. */
+static void AddMushrooms(Chunk *c, Rand *rnd, float x, float baseY, int count)
+{
+    for (int i = 0; i < count; i++)
+    {
+        if (c->mushroomCount >= CHUNK_MAX_MUSHROOMS) return;
+
+        Mushroom *m = &c->mushrooms[c->mushroomCount++];
+
+        m->x = x + RandRange(rnd, -46.0f, 46.0f);
+        m->baseY = baseY;
+        m->variant = (unsigned int)(RandNext(rnd) * 4096.0f);
+
+        /* The nourishing ones are common, the poisonous ones are not -
+           but not so rare that you never meet one. */
+        float roll = RandNext(rnd);
+        if      (roll < 0.30f) m->species = 0;
+        else if (roll < 0.52f) m->species = 1;
+        else if (roll < 0.68f) m->species = 3;
+        else if (roll < 0.80f) m->species = 2;
+        else if (roll < 0.92f) m->species = 5;
+        else                   m->species = 4;
+    }
+}
+
 static void AddTree(Chunk *c, Rand *rnd, float x, float baseY)
 {
     if (c->treeCount >= CHUNK_MAX_TREES) return;
@@ -158,6 +183,7 @@ static void BuildOnce(int index, unsigned int salt, Chunk *out)
     out->index = index;
     out->solidCount = 0;
     out->treeCount = 0;
+    out->mushroomCount = 0;
 
     float x0 = (float)index * CHUNK_WIDTH;
     float leftTop  = WorldEdgeHeight(index);
@@ -204,7 +230,22 @@ static void BuildOnce(int index, unsigned int salt, Chunk *out)
 
         if (!Add(out, (Rectangle){ x, top, segment, GROUND_DEPTH })) break;
 
-        if (RandNext(&rnd) < 0.45f) AddTree(out, &rnd, x + segment * 0.5f, top);
+        if (RandNext(&rnd) < 0.45f)
+        {
+            float tx = x + segment * 0.5f;
+            AddTree(out, &rnd, tx, top);
+
+            /* They grow in the damp round the base of things. */
+            if (RandNext(&rnd) < 0.55f)
+            {
+                AddMushrooms(out, &rnd, tx, top, 1 + (int)(RandNext(&rnd) * 3.0f));
+            }
+        }
+        else if (RandNext(&rnd) < 0.30f)
+        {
+            AddMushrooms(out, &rnd, x + segment * RandNext(&rnd), top,
+                         1 + (int)(RandNext(&rnd) * 2.0f));
+        }
 
         if (RandNext(&rnd) < 0.30f)
         {
@@ -246,6 +287,7 @@ void WorldBuildChunk(int index, Chunk *out)
     out->index = index;
     out->solidCount = 0;
     out->treeCount = 0;
+    out->mushroomCount = 0;
 
     float x0 = (float)index * CHUNK_WIDTH;
     float top = WorldEdgeHeight(index);

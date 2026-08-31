@@ -2,6 +2,7 @@
 #define WORLD_WORLDGEN_H
 
 #include "raylib.h"
+#include "world/mushroom.h"
 
 #include <stdbool.h>
 
@@ -17,6 +18,7 @@
 #define CHUNK_EDGE_WIDTH   180.0f   /* flat landing either side of a seam */
 #define CHUNK_MAX_SOLIDS      44
 #define CHUNK_MAX_TREES        6
+#define CHUNK_MAX_MUSHROOMS   10
 
 typedef struct Tree {
     float x;            /* trunk centre, world space */
@@ -36,6 +38,9 @@ typedef struct Chunk {
 
     Tree  trees[CHUNK_MAX_TREES];
     int   treeCount;
+
+    Mushroom mushrooms[CHUNK_MAX_MUSHROOMS];
+    int   mushroomCount;
 } Chunk;
 
 void  WorldSetSeed(unsigned int seed);

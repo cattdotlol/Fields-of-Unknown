@@ -52,6 +52,16 @@ void VitalsFeed(float amount)
     gVitals.hunger = Clamp01(gVitals.hunger + amount);
 }
 
+/* Signed on every axis, so one call covers a meal and a poisoning. */
+void VitalsApply(float hunger, float health, float warmth)
+{
+    gVitals.hunger = Clamp01(gVitals.hunger + hunger);
+    gVitals.warmth = Clamp01(gVitals.warmth + warmth);
+    gVitals.health = Clamp01(gVitals.health + health);
+
+    if (gVitals.health <= 0.0f) gVitals.dead = true;
+}
+
 void VitalsHurt(float amount)
 {
     gVitals.health = Clamp01(gVitals.health - amount);

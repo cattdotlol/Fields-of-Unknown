@@ -21,7 +21,12 @@ bool      TerrainOverlaps(Rectangle box);
 int  TerrainLoadedChunks(void);
 void TerrainLoadedRange(int *first, int *last);
 
-void TerrainDraw(float left, float right);
+/* Species index of a mushroom the box is standing on, or -1. Peek does
+   not consume; Eat marks it harvested. */
+int  TerrainMushroomUnder(Rectangle box);
+int  TerrainEatAt(Rectangle box);
+
+void TerrainDraw(float left, float right, Rectangle focus);
 void TerrainDrawWater(float left, float right);
 
 #endif /* WORLD_TERRAIN_H */

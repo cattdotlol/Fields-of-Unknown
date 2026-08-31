@@ -15,6 +15,7 @@ typedef enum InputAction {
     ACT_CROUCH,
     ACT_JUMP,
     ACT_SENSE,        /* the smell/sound view */
+    ACT_EAT,
     ACT_CONFIRM,
     ACT_CANCEL,
     ACT_DEBUG,

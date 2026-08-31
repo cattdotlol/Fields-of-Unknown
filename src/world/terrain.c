@@ -2,6 +2,7 @@
 #include "world/weather.h"
 #include "world/worldgen.h"
 #include "world/season.h"
+#include "world/mushroom.h"
 
 #include <math.h>
 
@@ -181,7 +182,53 @@ static void DrawTree(const Tree *t)
     }
 }
 
-void TerrainDraw(float left, float right)
+/* Reach is generous: this is a cat nosing at the ground, not a cursor. */
+static bool Touching(Rectangle box, const Mushroom *m)
+{
+    float pad = 18.0f;
+
+    return (m->x >= box.x - pad && m->x <= box.x + box.width + pad &&
+            m->baseY >= box.y - pad && m->baseY <= box.y + box.height + pad * 2.0f);
+}
+
+int TerrainMushroomUnder(Rectangle box)
+{
+    for (int c = 0; c < TERRAIN_LOADED_CHUNKS; c++)
+    {
+        if (!sChunks[c].active) continue;
+
+        for (int i = 0; i < sChunks[c].mushroomCount; i++)
+        {
+            if (MushroomIsHarvested(sChunks[c].index, i)) continue;
+            if (!Touching(box, &sChunks[c].mushrooms[i])) continue;
+
+            return (int)sChunks[c].mushrooms[i].species;
+        }
+    }
+
+    return -1;
+}
+
+int TerrainEatAt(Rectangle box)
+{
+    for (int c = 0; c < TERRAIN_LOADED_CHUNKS; c++)
+    {
+        if (!sChunks[c].active) continue;
+
+        for (int i = 0; i < sChunks[c].mushroomCount; i++)
+        {
+            if (MushroomIsHarvested(sChunks[c].index, i)) continue;
+            if (!Touching(box, &sChunks[c].mushrooms[i])) continue;
+
+            MushroomHarvest(sChunks[c].index, i);
+            return (int)sChunks[c].mushrooms[i].species;
+        }
+    }
+
+    return -1;
+}
+
+void TerrainDraw(float left, float right, Rectangle focus)
 {
     Color body = (Color){ 26, 30, 38, 255 };
     Color lip  = (Color){ 44, 52, 60, 255 };
@@ -213,6 +260,22 @@ void TerrainDraw(float left, float right)
             if (sinf(x * 0.37f) < 0.35f) continue;
 
             DrawRectangle((int)x, (int)(r.y - 3.0f), 3, 3, moss);
+        }
+    }
+
+    /* Mushrooms last, so they sit on top of the ground they grow from. */
+    for (int c = 0; c < TERRAIN_LOADED_CHUNKS; c++)
+    {
+        if (!sChunks[c].active) continue;
+
+        for (int i = 0; i < sChunks[c].mushroomCount; i++)
+        {
+            const Mushroom *m = &sChunks[c].mushrooms[i];
+
+            if (m->x < left - 40.0f || m->x > right + 40.0f) continue;
+            if (MushroomIsHarvested(sChunks[c].index, i)) continue;
+
+            MushroomDraw(m, Touching(focus, m));
         }
     }
 }

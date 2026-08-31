@@ -11,6 +11,7 @@
 #include "ui/theme.h"
 #include "world/terrain.h"
 #include "world/worldgen.h"
+#include "world/mushroom.h"
 #include "world/season.h"
 #include "world/weather.h"
 
@@ -31,6 +32,7 @@ static void Init(void)
     CatSpawn(WorldSpawnPoint());
     TerrainStream(CatPosition().x);
     VitalsReset();
+    MushroomClearHarvests();
 
     sCam.target = CatPosition();
     sCam.rotation = 0.0f;
@@ -63,6 +65,20 @@ static void FixedUpdate(float dt)
     TerrainStream(CatPosition().x);
 
     VitalsUpdate(dt);
+    MushroomTick(dt);
+
+    /* Eating is the only way hunger goes back up. What a species does is
+       not written down anywhere - you find out by trying it. */
+    if (InputPressed(ACT_EAT))
+    {
+        int species = TerrainEatAt(CatBounds());
+
+        if (species >= 0)
+        {
+            MushroomEffect e = MushroomEffectOf((unsigned char)species);
+            VitalsApply(e.hunger, e.health, e.warmth);
+        }
+    }
 
     /* Placeholder: back to the crash site. Dying should eventually cost
        something the player can feel. */
@@ -71,6 +87,7 @@ static void FixedUpdate(float dt)
         CatSpawn(WorldSpawnPoint());
         TerrainStream(CatPosition().x);
         VitalsReset();
+        MushroomClearHarvests();
     }
 }
 
@@ -88,6 +105,8 @@ static void Update(float dt)
         WorldSetSeed((unsigned int)GetTime() ^ (WorldSeed() * 2654435761u));
         CatSpawn(WorldSpawnPoint());
         TerrainStream(CatPosition().x);
+        VitalsReset();
+        MushroomClearHarvests();
         sCam.target = CatPosition();
     }
     if (InputPressed(ACT_CANCEL)) AppGoTo(SCREEN_TITLE);
@@ -160,7 +179,7 @@ static void Draw(void)
         (Vector2){ (float)GetScreenWidth(), (float)GetScreenHeight() }, sCam);
 
     BeginMode2D(sCam);
-        TerrainDraw(topLeft.x, botRight.x);
+        TerrainDraw(topLeft.x, botRight.x, CatBounds());
         CatDraw(AppRenderAlpha());
 
         /* Water last, so anything under it is tinted by it. */

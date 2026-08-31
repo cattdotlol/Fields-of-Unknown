@@ -24,6 +24,7 @@ bool VitalsHasStamina(float amount);
 void VitalsSpendStamina(float amount);
 
 void VitalsFeed(float amount);
+void VitalsApply(float hunger, float health, float warmth);
 void VitalsHurt(float amount);
 
 #endif /* ENTITY_VITALS_H */

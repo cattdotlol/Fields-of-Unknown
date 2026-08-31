@@ -77,15 +77,24 @@ static void Bar(float x, float y, float w, float h, float value, Color fill, con
     DrawRectangleLinesEx((Rectangle){ x, y, w, h }, px, gTheme.border);
 }
 
+/* Anchored bottom-left. The camera keeps the cat just above centre, so
+   the top of the screen is where the world is; the bottom corner is the
+   quietest part of the frame. */
+#define HUD_MARGIN 30.0f
+
 void HudDraw(void)
 {
     float s = ThemeScale();
 
-    float x = 26.0f * s;
-    float y = 34.0f * s;
-    float w = 190.0f * s;
-    float h = 12.0f * s;
-    float step = 30.0f * s;
+    float w = 170.0f * s;
+    float h = 11.0f * s;
+    float step = 27.0f * s;
+    float cellPreview = 3.0f * s;
+
+    float blockH = (float)HEART_H * cellPreview + 24.0f * s + step * 3.0f + 14.0f * s;
+
+    float x = HUD_MARGIN * s;
+    float y = (float)GetScreenHeight() - HUD_MARGIN * s - blockH;
 
     Color health  = (Color){ 198,  72,  72, 255 };
     Color hunger  = (Color){ 208, 150,  60, 255 };
@@ -101,7 +110,7 @@ void HudDraw(void)
     }
 
     /* Health is hearts: five of them, in halves. */
-    float cell = 3.0f * s;
+    float cell = cellPreview;
     float hearts = gVitals.health * (float)HEART_COUNT;
     float advance = (float)(HEART_W + 2) * cell;
 
@@ -117,7 +126,7 @@ void HudDraw(void)
         DrawHeart(x + (float)i * advance, y, cell, value, health);
     }
 
-    float below = y + (float)HEART_H * cell + 26.0f * s;
+    float below = y + (float)HEART_H * cell + 24.0f * s;
 
     Bar(x, below,            w, h, gVitals.hunger,  hunger,  "FOOD");
     Bar(x, below + step,     w, h, gVitals.stamina, stamina, "STAMINA");
