@@ -8,4 +8,7 @@ void AudioLoad(void);
 void AudioUnload(void);
 void AudioUpdate(void);
 
+/* Something hit the cat. strength 0..1. */
+void AudioImpact(float strength);
+
 #endif /* CORE_AUDIO_H */

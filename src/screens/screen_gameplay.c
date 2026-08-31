@@ -1,5 +1,6 @@
 #include "screens/screens.h"
 #include "core/app.h"
+#include "core/audio.h"
 #include "core/config.h"
 #include "core/settings.h"
 #include "core/input.h"
@@ -28,6 +29,16 @@
 static Camera2D sCam;
 static bool     sDebug;
 
+/* Dying used to be a silent teleport home: one frame at chunk five, the
+   next at chunk zero, with nothing to say what had happened. */
+static float sHurt;        /* red flash, decays          */
+static float sDeath;       /* 0..1 fade out, then in     */
+static bool  sReviving;
+static float sLastHealth;
+
+#define DEATH_FADE_OUT 1.4f
+#define DEATH_FADE_IN  2.2f
+
 /* Everything a fresh run resets, in one place. Death, the debug reroll
    and startup all go through here - they used to hand-roll the same
    list, and every new system was another line to forget. */
@@ -42,6 +53,7 @@ static void RestartRun(void)
     StalkersReset();
 
     sCam.target = CatPosition();
+    sLastHealth = gVitals.health;
 }
 
 static void Init(void)
@@ -74,6 +86,36 @@ static void FollowCat(float dt)
 
 static void FixedUpdate(float dt)
 {
+    /* --- dying ---------------------------------------------------------
+       The world holds still while it fades, so the death reads as an
+       event rather than a glitch. */
+    if (gVitals.dead)
+    {
+        sDeath += dt / DEATH_FADE_OUT;
+
+        if (sDeath >= 1.0f)
+        {
+            sDeath = 1.0f;
+            RestartRun();
+            sReviving = true;
+        }
+
+        return;
+    }
+
+    if (sReviving)
+    {
+        sDeath -= dt / DEATH_FADE_IN;
+
+        if (sDeath <= 0.0f)
+        {
+            sDeath = 0.0f;
+            sReviving = false;
+        }
+    }
+
+    if (sHurt > 0.0f) sHurt -= dt * 1.8f;
+
     CatFixedUpdate(dt);
 
     /* Generate ahead of wherever the cat has got to. */
@@ -81,6 +123,16 @@ static void FixedUpdate(float dt)
 
     VitalsUpdate(dt);
     MushroomTick(dt);
+
+    /* Anything that took health off gets a flash and a thump. */
+    if (gVitals.health < sLastHealth - 0.001f)
+    {
+        float lost = sLastHealth - gVitals.health;
+
+        sHurt = 1.0f;
+        AudioImpact(lost * 4.0f);
+    }
+    sLastHealth = gVitals.health;
     RatsFixedUpdate(dt);
     StalkersFixedUpdate(dt);
 
@@ -211,6 +263,13 @@ static void Draw(void)
 
     FilmVignette(0.6f);
 
+    /* Taking damage: a red wash, so a hit is never invisible. */
+    if (sHurt > 0.0f)
+    {
+        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                      Fade((Color){ 168, 32, 32, 255 }, sHurt * 0.30f));
+    }
+
     /* Lightning: the flash lands now, the sound arrives later. */
     float flash = WeatherFlash();
     if (flash > 0.0f)
@@ -219,7 +278,14 @@ static void Draw(void)
                       Fade(RAYWHITE, flash * 0.42f));
     }
 
-    if (gSettings.showHud) HudDraw();
+    if (gSettings.showHud && sDeath < 0.9f) HudDraw();
+
+    /* Death fade goes over everything, including the HUD. */
+    if (sDeath > 0.0f)
+    {
+        DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), Fade(BLACK, sDeath));
+    }
+
     if (sDebug) DrawDebug();
 }
 

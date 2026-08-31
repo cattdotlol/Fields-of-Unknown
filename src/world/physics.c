@@ -37,14 +37,24 @@ static void MoveX(Body *b, float dt)
     b->pos.x += b->vel.x * dt;
 
     Rectangle box = BodyRect(b);
+    float half = b->width * 0.5f;
 
     for (int i = 0; i < TerrainCount(); i++)
     {
         Rectangle s = TerrainSolid(i);
         if (!CheckCollisionRecs(box, s)) continue;
 
-        if (b->vel.x > 0.0f)      b->pos.x = s.x - b->width * 0.5f;
-        else if (b->vel.x < 0.0f) b->pos.x = s.x + s.width + b->width * 0.5f;
+        /* Push out of the NEAREST edge, not the one the velocity implies.
+           Resolving by direction throws a deeply overlapping body clean
+           across the solid - up to 420 units backwards for a ground slab,
+           which is what "it sent me back" was. Bodies end up overlapped
+           routinely: swimming holds them at the waterline, which sits at
+           about the same height as the ground. */
+        float pushLeft  = (b->pos.x + half) - s.x;
+        float pushRight = (s.x + s.width) - (b->pos.x - half);
+
+        if (pushLeft < pushRight) b->pos.x = s.x - half;
+        else                      b->pos.x = s.x + s.width + half;
 
         b->vel.x = 0.0f;
         box = BodyRect(b);
@@ -65,12 +75,17 @@ static void MoveY(Body *b, float dt)
         Rectangle s = TerrainSolid(i);
         if (!CheckCollisionRecs(box, s)) continue;
 
-        if (b->vel.y > 0.0f)
+        /* Same rule vertically: nearest face wins, so a body overlapping
+           a 280-unit-deep slab is not dropped out of the bottom of it. */
+        float pushUp   = b->pos.y - s.y;
+        float pushDown = (s.y + s.height) - (b->pos.y - b->height);
+
+        if (pushUp <= pushDown)
         {
             b->pos.y = s.y;
             b->grounded = true;
         }
-        else if (b->vel.y < 0.0f)
+        else
         {
             b->pos.y = s.y + s.height + b->height;
         }

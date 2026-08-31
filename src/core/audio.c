@@ -30,6 +30,9 @@ static bool  sThunderReady;
 static Sound sRoar;
 static bool  sRoarReady;
 
+static Sound sImpact;
+static bool  sImpactReady;
+
 static unsigned int sNoise = 0x9E3779B9u;
 
 static float WhiteNoise(void)
@@ -127,6 +130,22 @@ void AudioLoad(void)
        crack. Same technique: no second file to ship. */
     sRoar = GenerateThunder(0.05f, 0.010f, 0.95f);
     sRoarReady = true;
+
+    /* Nearly all crack and gone almost at once: a hit, not a rumble. */
+    sImpact = GenerateThunder(0.95f, 0.30f, 13.0f);
+    sImpactReady = true;
+}
+
+void AudioImpact(float strength)
+{
+    if (!sImpactReady) return;
+
+    if (strength < 0.0f) strength = 0.0f;
+    if (strength > 1.0f) strength = 1.0f;
+
+    SetSoundVolume(sImpact, (0.4f + strength * 0.6f) * gSettings.sfxVolume);
+    SetSoundPitch(sImpact, 1.25f - strength * 0.35f);
+    PlaySound(sImpact);
 }
 
 void AudioUnload(void)
@@ -139,7 +158,10 @@ void AudioUnload(void)
     }
 
     if (sRoarReady) UnloadSound(sRoar);
+    if (sImpactReady) UnloadSound(sImpact);
+
     sRoarReady = false;
+    sImpactReady = false;
 
     sRainReady = false;
     sThunderReady = false;

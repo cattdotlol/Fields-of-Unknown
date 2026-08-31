@@ -28,6 +28,7 @@ int main(void)
     SuiteInput();
     SuiteRat();
     SuiteStalker();
+    SuitePhysics();
 
     printf("\n%s\n", sFailures ? "FAILED" : "all passed");
     return sFailures ? 1 : 0;
