@@ -8,5 +8,6 @@ void Check(const char *name, bool got, bool expected);
 void SuiteWorldgen(void);
 void SuiteVitals(void);
 void SuiteMushroom(void);
+void SuiteInput(void);
 
 #endif /* TESTS_H */

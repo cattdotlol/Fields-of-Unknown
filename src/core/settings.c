@@ -1,4 +1,5 @@
 #include "core/settings.h"
+#include "core/input.h"
 
 #include "raylib.h"
 
@@ -41,6 +42,16 @@ bool SettingsSave(const char *path)
     fprintf(f, "showfps=%d\n",      gSettings.showFps ? 1 : 0);
     fprintf(f, "showhud=%d\n",      gSettings.showHud ? 1 : 0);
 
+    /* Key bindings live here too, so one file is the whole of a player's
+       setup. */
+    for (int a = 0; a < ACT_COUNT; a++)
+    {
+        fprintf(f, "bind%d=%d,%d,%d\n", a,
+                InputBinding((InputAction)a, 0),
+                InputBinding((InputAction)a, 1),
+                InputBinding((InputAction)a, 2));
+    }
+
     fclose(f);
     return true;
 }
@@ -56,6 +67,20 @@ bool SettingsLoad(const char *path)
 
     while (fgets(line, sizeof(line), f) != NULL)
     {
+        int index, k0, k1, k2;
+
+        if (sscanf(line, "bind%d=%d,%d,%d", &index, &k0, &k1, &k2) == 4)
+        {
+            if (index >= 0 && index < ACT_COUNT)
+            {
+                InputBind((InputAction)index, 0, k0);
+                InputBind((InputAction)index, 1, k1);
+                InputBind((InputAction)index, 2, k2);
+            }
+
+            continue;
+        }
+
         if (sscanf(line, "%63[^=]=%f", key, &value) != 2) continue;
 
         if      (strcmp(key, "master")     == 0) gSettings.masterVolume = value;

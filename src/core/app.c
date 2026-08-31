@@ -93,6 +93,7 @@ void AppInit(void)
     sScreens[SCREEN_TITLE]    = &ScreenTitle;
     sScreens[SCREEN_INTRO]    = &ScreenIntro;
     sScreens[SCREEN_SETTINGS] = &ScreenSettings;
+    sScreens[SCREEN_KEYBINDS] = &ScreenKeybinds;
     sScreens[SCREEN_GAMEPLAY] = &ScreenGameplay;
 
     EnterScreen(SCREEN_TITLE);

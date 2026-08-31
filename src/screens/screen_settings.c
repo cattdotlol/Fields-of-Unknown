@@ -18,6 +18,7 @@ enum {
     ROW_VSYNC,
     ROW_SHOWFPS,
     ROW_SHOWHUD,
+    ROW_CONTROLS,
     ROW_BACK,
     ROW_COUNT
 };
@@ -114,6 +115,9 @@ static void Draw(void)
     changed |= WidgetToggle(row, "SHOW FPS", &gSettings.showFps, sFocus == ROW_SHOWFPS);
     row.y += rowH + rowGap;
     changed |= WidgetToggle(row, "SHOW VITALS", &gSettings.showHud, sFocus == ROW_SHOWHUD);
+    row.y += rowH + rowGap;
+
+    if (WidgetButton(row, "CONTROLS", sFocus == ROW_CONTROLS)) AppGoTo(SCREEN_KEYBINDS);
     row.y += rowH + rowGap;
 
     if (WidgetButton(row, "BACK", sFocus == ROW_BACK)) AppGoTo(SCREEN_TITLE);

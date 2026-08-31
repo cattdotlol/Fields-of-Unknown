@@ -9,6 +9,7 @@ typedef enum ScreenId {
     SCREEN_TITLE = 0,
     SCREEN_INTRO,
     SCREEN_SETTINGS,
+    SCREEN_KEYBINDS,
     SCREEN_GAMEPLAY,
     SCREEN_COUNT
 } ScreenId;
@@ -39,6 +40,7 @@ typedef struct Screen {
 
 extern const Screen ScreenTitle;
 extern const Screen ScreenIntro;
+extern const Screen ScreenKeybinds;
 extern const Screen ScreenSettings;
 extern const Screen ScreenGameplay;
 

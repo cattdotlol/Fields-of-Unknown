@@ -25,6 +25,7 @@ int main(void)
     SuiteWorldgen();
     SuiteVitals();
     SuiteMushroom();
+    SuiteInput();
 
     printf("\n%s\n", sFailures ? "FAILED" : "all passed");
     return sFailures ? 1 : 0;

@@ -39,5 +39,17 @@ float InputAxisY(void);
 
 void InputBind(InputAction action, int slot, int key);
 int  InputBinding(InputAction action, int slot);
+void InputResetDefaults(void);
+
+/* Names for the rebinding screen. */
+const char *InputActionName(InputAction action);
+const char *InputKeyName(int key);
+
+/* Confirm, cancel and the debug toggle stay put: rebinding the key that
+   cancels a rebind is a good way to lock someone out of their own menu. */
+bool InputActionRebindable(InputAction action);
+
+/* Whichever action already uses this key, or ACT_COUNT if it is free. */
+InputAction InputActionUsing(int key, InputAction ignore);
 
 #endif /* CORE_INPUT_H */

@@ -66,6 +66,9 @@ intend to play it.
 | `F1` | debug overlay |
 | `F5` | reroll the world |
 
+All of these are rebindable in **Settings → Controls**, and the bindings
+are saved alongside everything else in `settings.cfg`.
+
 ## How it fits together
 
 ```
