@@ -41,6 +41,15 @@ static bool     sDebug;
 static Vector2 sCamPrev;
 static Vector2 sCamNow;
 
+/* Ambient light is smoothed like an eye adapting rather than set straight
+   from the world. Brightening is quicker than darkening, which is both
+   how eyes behave and what stops a doorway from strobing. */
+static float sAmbient = 0.4f;
+static float sAmbientTarget = 0.4f;
+
+#define ADAPT_BRIGHTEN 2.6f
+#define ADAPT_DARKEN   1.1f
+
 /* Dying used to be a silent teleport home: one frame at chunk five, the
    next at chunk zero, with nothing to say what had happened. */
 static float sHurt;        /* red flash, decays          */
@@ -67,6 +76,9 @@ static void RestartRun(void)
 
     sCamNow = CatPosition();
     sCamNow.y -= 24.0f;
+
+    sAmbient = 0.4f;
+    sAmbientTarget = 0.4f;
     sCamPrev = sCamNow;
     sCam.target = sCamNow;
 
@@ -118,6 +130,58 @@ static void CameraApply(void)
     sCam.target.y = sCamPrev.y + (sCamNow.y - sCamPrev.y) * a;
 }
 
+/* How enclosed the cat is, from 0 to 1.
+
+   This used to be a yes/no probe, which meant ambient light jumped
+   between two values the instant a branch or a fire escape crossed a
+   ten-unit column above the cat. Several rays, each weighted by how low
+   the ceiling is, gives something that moves smoothly instead. */
+#define COVER_RAYS   5
+#define COVER_REACH  320.0f
+
+static float CoverageAbove(void)
+{
+    Vector2 p = CatPosition();
+    float covered = 0.0f;
+
+    for (int i = 0; i < COVER_RAYS; i++)
+    {
+        float t = (float)i / (float)(COVER_RAYS - 1);
+        float ox = (t - 0.5f) * 52.0f;
+
+        for (float h = 24.0f; h <= COVER_REACH; h += 42.0f)
+        {
+            Rectangle probe = { p.x + ox - 3.0f, p.y - h, 6.0f, 10.0f };
+
+            if (TerrainOverlaps(probe))
+            {
+                /* A low roof encloses you more than a distant one. */
+                covered += 1.0f - (h / COVER_REACH) * 0.45f;
+                break;
+            }
+        }
+    }
+
+    return covered / (float)COVER_RAYS;
+}
+
+/* Where the light should settle, given where the cat is standing. */
+static float AmbientTarget(void)
+{
+    float coverage = CoverageAbove();
+
+    float target = 0.14f + (0.46f - 0.14f) * (1.0f - coverage);
+
+    target -= WeatherRain() * 0.10f;
+    target -= (1.0f - SeasonTemperature()) * 0.06f;
+
+    /* Under water it is whatever the depth leaves you. */
+    float depth = OceanDepthAt(CatPosition().y);
+    if (depth > 0.0f) target *= OceanLight(depth);
+
+    return (target < 0.04f) ? 0.04f : target;
+}
+
 static void FixedUpdate(float dt)
 {
     if (DevFrozen()) return;
@@ -158,6 +222,13 @@ static void FixedUpdate(float dt)
     TerrainStream(CatPosition().x);
 
     CameraStep(dt);
+
+    /* Adapt toward the light the world says it should be. Done here, not
+       per frame, so the rate does not change with the frame rate. */
+    sAmbientTarget = AmbientTarget();
+
+    float rate = (sAmbientTarget > sAmbient) ? ADAPT_BRIGHTEN : ADAPT_DARKEN;
+    sAmbient += (sAmbientTarget - sAmbient) * rate * dt;
 
     VitalsUpdate(dt);
     MushroomTick(dt);
@@ -292,38 +363,17 @@ static void DrawDebug(void)
     }
 }
 
-/* Anything solid overhead means the cat is inside or underground, which
-   is the whole reason caves and apartments should look different. */
-static bool UnderCover(void)
-{
-    Vector2 p = CatPosition();
-    Rectangle probe = { p.x - 5.0f, p.y - 300.0f, 10.0f, 250.0f };
-
-    return TerrainOverlaps(probe);
-}
-
 /* Lights the world, then multiplies the result over what was drawn. */
 static void ApplyLighting(void)
 {
     if (!DevLighting()) return;
 
-    bool inside = UnderCover();
+    /* Lightning is added after the smoothing: a flash should be instant,
+       everything else should ease. */
+    float ambient = sAmbient + WeatherFlash() * 0.45f;
+    if (ambient > 1.0f) ambient = 1.0f;
 
-    /* Storms darken the day; being under cover darkens it far more. */
-    float ambient = inside ? 0.16f : 0.46f;
-    ambient -= WeatherRain() * 0.10f;
-    ambient -= (1.0f - SeasonTemperature()) * 0.06f;
-
-    /* Under water, light is whatever survives the depth. Exponential, so
-       the twilight zone really is twilight and the midnight zone is
-       nothing at all. */
-    float depth = OceanDepthAt(CatPosition().y);
-    if (depth > 0.0f) ambient *= OceanLight(depth);
-
-    /* Lightning lights everything, briefly. */
-    ambient += WeatherFlash() * 0.45f;
-
-    if (ambient < 0.05f) ambient = 0.05f;
+    bool inside = (sAmbient < 0.28f);
 
     LightingBegin(ambient);
 
@@ -338,9 +388,18 @@ static void ApplyLighting(void)
     Vector2 viewR = GetScreenToWorld2D(
         (Vector2){ (float)GetScreenWidth(), (float)GetScreenHeight() }, sCam);
 
-    int lit = 0;
+    /* Keep the nearest few, rather than the first few found. Taking them
+       in iteration order meant the lit set changed as chunks streamed in
+       and windows popped on and off. */
+    #define WINDOW_LIGHTS 8
 
-    for (int i = 0; i < TerrainCount() && lit < 8; i++)
+    Vector2 best[WINDOW_LIGHTS];
+    float bestDistance[WINDOW_LIGHTS];
+    int found = 0;
+
+    Vector2 focus = CatPosition();
+
+    for (int i = 0; i < TerrainCount(); i++)
     {
         if (TerrainSolidKind(i) != SOLID_WALL) continue;
 
@@ -348,14 +407,40 @@ static void ApplyLighting(void)
         if (r.x + r.width < viewL.x || r.x > viewR.x) continue;
 
         /* Same rule the wall is drawn with, so the light sits on a window. */
-        for (float wy = r.y + 26.0f; wy < r.y + r.height - 24.0f && lit < 8; wy += 80.0f)
+        for (float wy = r.y + 26.0f; wy < r.y + r.height - 24.0f; wy += 80.0f)
         {
             if (sinf(wy * 0.21f + r.x * 0.07f) <= 0.55f) continue;
 
-            LightingAddLight(sCam, (Vector2){ r.x + 7.0f, wy + 7.0f }, 190.0f,
-                             (Color){ 220, 170, 96, 255 }, 0.60f);
-            lit++;
+            Vector2 at = { r.x + 7.0f, wy + 7.0f };
+            float dx = at.x - focus.x;
+            float dy = at.y - focus.y;
+            float d = dx * dx + dy * dy;
+
+            int slot = (found < WINDOW_LIGHTS) ? found : -1;
+
+            if (slot < 0)
+            {
+                float worst = -1.0f;
+                for (int k = 0; k < WINDOW_LIGHTS; k++)
+                {
+                    if (bestDistance[k] > worst) { worst = bestDistance[k]; slot = k; }
+                }
+
+                if (d >= worst) continue;
+            }
+            else
+            {
+                found++;
+            }
+
+            best[slot] = at;
+            bestDistance[slot] = d;
         }
+    }
+
+    for (int i = 0; i < found; i++)
+    {
+        LightingAddLight(sCam, best[i], 190.0f, (Color){ 220, 170, 96, 255 }, 0.60f);
     }
 
     /* Jellyfish are the only light down there. */

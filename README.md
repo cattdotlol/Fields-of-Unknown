@@ -36,16 +36,6 @@ have CI build it.
 
 All rebindable in Settings → Controls.
 
-## A couple of things worth knowing
-
-The world is infinite and isn't stored anywhere. Every chunk is a pure
-function of the seed and its index, so walking back gets you the same
-place you left. Generation checks the cat's actual jump reach and throws
-away anything it can't cross.
-
-Noise is most of the game. Rats run from it, and something else comes
-looking for it. Sprinting is loud, crouching isn't, and rain covers you.
-
 ## Licence
 
 Haven't picked one yet.
