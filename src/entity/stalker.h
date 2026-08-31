@@ -24,6 +24,7 @@ typedef enum StalkerState {
 } StalkerState;
 
 void StalkersReset(void);
+void StalkersForceSpawn(float x);   /* dev tools */
 void StalkersFixedUpdate(float dt);
 void StalkersDraw(float alpha, float left, float right);
 

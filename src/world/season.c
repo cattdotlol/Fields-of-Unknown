@@ -37,6 +37,13 @@ void SeasonUpdate(float dt)
     if (sElapsed >= year) sElapsed -= year;
 }
 
+void SeasonSet(Season season)
+{
+    if (season < 0 || season >= SEASON_COUNT) return;
+
+    sElapsed = (float)season * SEASON_LENGTH + SEASON_LENGTH * 0.25f;
+}
+
 Season SeasonCurrent(void)
 {
     int index = (int)(sElapsed / SEASON_LENGTH);

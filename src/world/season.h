@@ -19,6 +19,9 @@ void SeasonInit(void);
 void SeasonUpdate(float dt);
 
 Season      SeasonCurrent(void);
+
+/* Dev tools only. */
+void SeasonSet(Season season);
 const char *SeasonName(void);
 float       SeasonProgress(void);     /* 0..1 through the current season */
 

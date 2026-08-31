@@ -43,6 +43,10 @@ float WeatherFlash(void);
 bool WeatherConsumeThunder(float *loudness);
 
 WeatherState WeatherCurrent(void);
+
+/* Dev tools only: force the sky, or set how flooded the world is. */
+void WeatherForceState(WeatherState state);
+void WeatherSetWetness(float wetness);
 const char  *WeatherName(void);
 
 #endif /* WORLD_WEATHER_H */

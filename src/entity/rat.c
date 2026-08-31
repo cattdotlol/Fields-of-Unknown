@@ -166,6 +166,39 @@ static float DryGroundAt(float x)
     return best;
 }
 
+/* Spawns near a given x rather than near the cat. */
+static void TrySpawnAt(float centreX)
+{
+    for (int attempt = 0; attempt < 12; attempt++)
+    {
+        float x = centreX + RandRange(-160.0f, 160.0f);
+        float ground = DryGroundAt(x);
+        if (ground < 0.0f) continue;
+
+        for (int i = 0; i < RAT_MAX; i++)
+        {
+            if (sRats[i].active) continue;
+
+            BodyInit(&sRats[i].body, (Vector2){ x, ground }, BODY_W, BODY_H);
+            sRats[i].state = RAT_FORAGE;
+            sRats[i].facing = (Rand01() < 0.5f) ? -1.0f : 1.0f;
+            sRats[i].timer = RandRange(1.0f, 3.0f);
+            sRats[i].alert = 0.0f;
+            sRats[i].stride = 0.0f;
+            sRats[i].nervous = RandRange(0.70f, 1.50f);
+            sRats[i].speedScale = RandRange(0.85f, 1.20f);
+            sRats[i].restless = RandRange(0.70f, 1.40f);
+            sRats[i].burst = 0.0f;
+            sRats[i].dart = 0.0f;
+            sRats[i].wary = 0.0f;
+            sRats[i].blocked = 0.0f;
+            sRats[i].active = true;
+            return;
+        }
+        return;
+    }
+}
+
 static void TrySpawn(float catX)
 {
     for (int attempt = 0; attempt < 8; attempt++)
@@ -203,6 +236,11 @@ static void TrySpawn(float catX)
 
         return;     /* pool full */
     }
+}
+
+void RatsForceSpawn(float x)
+{
+    TrySpawnAt(x);
 }
 
 /* --- behaviour --------------------------------------------------------- */

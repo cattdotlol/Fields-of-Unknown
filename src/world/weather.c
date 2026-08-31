@@ -207,6 +207,22 @@ bool WeatherIsSnow(void)
     return SeasonTemperature() < 0.32f && sRain > 0.05f;
 }
 
+void WeatherForceState(WeatherState state)
+{
+    if (state < 0 || state >= WEATHER_STATE_COUNT) return;
+
+    EnterState(state);
+    sRain = sTarget;        /* skip the ramp; this is a dev jump */
+}
+
+void WeatherSetWetness(float wetness)
+{
+    if (wetness < 0.0f) wetness = 0.0f;
+    if (wetness > 1.0f) wetness = 1.0f;
+
+    sWetness = wetness;
+}
+
 WeatherState WeatherCurrent(void) { return sState; }
 
 const char *WeatherName(void) { return NAMES[sState]; }

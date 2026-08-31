@@ -26,6 +26,7 @@ typedef enum RatState {
 } RatState;
 
 void RatsReset(void);
+void RatsForceSpawn(float x);   /* dev tools */
 void RatsFixedUpdate(float dt);
 void RatsDraw(float alpha, float left, float right);
 

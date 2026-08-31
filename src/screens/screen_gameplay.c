@@ -2,6 +2,7 @@
 #include "core/app.h"
 #include "core/audio.h"
 #include "core/config.h"
+#include "core/devtools.h"
 #include "core/settings.h"
 #include "core/input.h"
 #include "entity/cat.h"
@@ -86,6 +87,8 @@ static void FollowCat(float dt)
 
 static void FixedUpdate(float dt)
 {
+    if (DevFrozen()) return;
+
     /* --- dying ---------------------------------------------------------
        The world holds still while it fades, so the death reads as an
        event rather than a glitch. */
@@ -167,6 +170,16 @@ static void FixedUpdate(float dt)
 
 static void Update(float dt)
 {
+    if (IsKeyPressed(KEY_GRAVE)) DevToolsToggle();
+
+    /* While the menu is up it owns the keyboard, or arrow keys would move
+       the cat and browse the menu at the same time. */
+    if (DevToolsUpdate(dt))
+    {
+        FollowCat(dt);
+        return;
+    }
+
     /* Camera runs per-frame off the interpolated position, so it stays
        smooth on displays faster than the tick rate. */
     FollowCat(dt);
@@ -260,6 +273,45 @@ static void Draw(void)
 
         /* Water last, so anything under it is tinted by it. */
         TerrainDrawWater(topLeft.x, botRight.x);
+
+        if (DevShowHitboxes())
+        {
+            for (int i = 0; i < TerrainCount(); i++)
+            {
+                Rectangle r = TerrainSolid(i);
+                if (r.x + r.width < topLeft.x || r.x > botRight.x) continue;
+
+                DrawRectangleLinesEx(r, 1.0f, Fade(GREEN, 0.45f));
+            }
+
+            DrawRectangleLinesEx(CatBounds(), 1.5f, YELLOW);
+        }
+
+        if (DevShowAI())
+        {
+            for (int i = 0; i < RAT_MAX; i++)
+            {
+                if (!RatActive(i)) continue;
+
+                Vector2 p = RatPosition(i);
+                const char *tag = (RatCurrentState(i) == RAT_FLEE) ? "!"
+                                : (RatCurrentState(i) == RAT_FREEZE) ? "?" : ".";
+
+                DrawText(tag, (int)p.x - 2, (int)p.y - 30, 10, ORANGE);
+                DrawRectangle((int)p.x - 10, (int)p.y - 18,
+                              (int)(20.0f * RatAlertLevel(i)), 2, ORANGE);
+            }
+
+            for (int i = 0; i < STALKER_MAX; i++)
+            {
+                if (!StalkerActive(i)) continue;
+
+                Vector2 p = StalkerPosition(i);
+                DrawRectangle((int)p.x - 20, (int)p.y - 46,
+                              (int)(40.0f * StalkerInterest(i)), 3, RED);
+                DrawLineV(p, CatPosition(), Fade(RED, 0.25f));
+            }
+        }
     EndMode2D();
 
     FilmVignette(0.6f);
@@ -288,6 +340,7 @@ static void Draw(void)
     }
 
     if (sDebug) DrawDebug();
+    DevToolsDraw();
 }
 
 const Screen ScreenGameplay = {

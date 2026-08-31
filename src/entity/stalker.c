@@ -200,6 +200,12 @@ static void TrySpawn(float catX)
     }
 }
 
+void StalkersForceSpawn(float x)
+{
+    sElapsed = GRACE + 1.0f;    /* skip the grace window */
+    TrySpawn(x);
+}
+
 /* --- behaviour --------------------------------------------------------- */
 
 static bool GroundAhead(const Stalker *s)
