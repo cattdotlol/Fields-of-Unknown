@@ -74,7 +74,14 @@ static void ReadCpu(void)
 {
     size_t size = sizeof(gSysInfo.cpu);
 
-    if (sysctlbyname("machdep.cpu.brand_string", gSysInfo.cpu, &size, NULL, 0) != 0)
+    if (sysctlbyname("machdep.cpu.brand_string", gSysInfo.cpu, &size, NULL, 0) == 0)
+    {
+        /* Intel brand strings come back padded. Trimming here also keeps
+           the helper used on every platform - it is defined
+           unconditionally, so leaving it uncalled is a warning. */
+        Trim(gSysInfo.cpu);
+    }
+    else
     {
         gSysInfo.cpu[0] = '\0';
     }
