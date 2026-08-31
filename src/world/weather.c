@@ -49,9 +49,16 @@ static float sThunderIn;
 static float sThunderLoud;
 static bool  sThunderPending;
 
+/* Its own generator, not raylib's global one. Film grain draws hundreds
+   of numbers a frame from that, so sharing it made the weather depend on
+   whether the intro happened to be on screen - and stop being
+   reproducible from WORLD_SEED at all. */
+static unsigned int sRng = 1u;
+
 static float Rand01(void)
 {
-    return (float)GetRandomValue(0, 10000) / 10000.0f;
+    sRng = sRng * 1664525u + 1013904223u;
+    return (float)((sRng >> 8) & 0xFFFFFFu) / (float)0xFFFFFFu;
 }
 
 /* Weather drifts a step at a time rather than teleporting from dry to
@@ -84,7 +91,7 @@ static void EnterState(WeatherState s)
 
 void WeatherInit(unsigned int seed)
 {
-    SetRandomSeed(seed);
+    sRng = seed | 1u;
 
     sTime = 0.0f;
     sWetness = 0.10f;   /* the ground starts dry; flooding is earned */

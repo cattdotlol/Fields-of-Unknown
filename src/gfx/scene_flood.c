@@ -47,16 +47,19 @@ static Star   sStars[STAR_COUNT];
 
 static float sTime;
 static float sFlicker;
-static int   sFlickerSlot;
+
+/* Also its own: see the note in weather.c. */
+static unsigned int sRng = 1u;
 
 static float Rand01(void)
 {
-    return (float)GetRandomValue(0, 10000) / 10000.0f;
+    sRng = sRng * 1664525u + 1013904223u;
+    return (float)((sRng >> 8) & 0xFFFFFFu) / (float)0xFFFFFFu;
 }
 
 void FloodSceneInit(unsigned int seed)
 {
-    SetRandomSeed(seed);
+    sRng = (seed ^ 0x5EED5EEDu) | 1u;
 
     for (int i = 0; i < RAIN_COUNT; i++)
     {
@@ -76,7 +79,6 @@ void FloodSceneInit(unsigned int seed)
         sStars[i].big = (Rand01() > 0.88f);
     }
 
-    sFlickerSlot = GetRandomValue(-40, 40);
     sTime = 0.0f;
 }
 
@@ -202,7 +204,11 @@ static void DrawLayer(const Layer *L, unsigned int id, Color color,
                               Mul(c, reveal));
             }
 
-            if (slot == sFlickerSlot)
+            /* Roughly every thirteenth building still has a light. The
+               old version picked a single slot near the origin, so in an
+               endless world you walked past it once and never saw
+               another. */
+            if ((SlotHash(id, slot, 99u) % 13u) == 0u)
             {
                 float cell = CellSize();
                 DrawRectangle((int)(x + bw * 0.5f), (int)(waterY - bh * 0.6f),

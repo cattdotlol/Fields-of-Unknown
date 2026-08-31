@@ -44,6 +44,7 @@ static void Init(void)
 static void FollowCat(float dt)
 {
     float zoom = ThemeScale() * WORLD_ZOOM;
+    if (zoom < 0.05f) zoom = 0.05f;   /* a minimised window reports zero */
 
     sCam.zoom = zoom;
     sCam.offset = (Vector2){ (float)GetScreenWidth() * 0.5f, (float)GetScreenHeight() * 0.55f };
@@ -103,6 +104,10 @@ static void FixedUpdate(float dt)
         VitalsReset();
         MushroomClearHarvests();
         RatsReset();
+
+        /* Snap, do not lerp: without this the camera flies back across
+           however many thousand units you had walked. */
+        sCam.target = CatPosition();
     }
 }
 

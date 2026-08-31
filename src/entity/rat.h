@@ -14,6 +14,10 @@
 
 #define RAT_MAX 20
 
+/* How many the world tries to keep alive near the cat. RAT_MAX is the
+   ceiling the pool can hold; this is the number actually aimed for. */
+#define RAT_TARGET 12
+
 typedef enum RatState {
     RAT_WANDER = 0,
     RAT_PAUSE,

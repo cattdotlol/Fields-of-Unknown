@@ -278,7 +278,7 @@ void RatsFixedUpdate(float dt)
     }
 
     /* Trickle in rather than popping a crowd into existence at once. */
-    if (alive < RAT_MAX / 2 && Rand01() < 0.03f) TrySpawn(catPos.x);
+    if (alive < RAT_TARGET && Rand01() < 0.03f) TrySpawn(catPos.x);
 }
 
 /* --- catching ---------------------------------------------------------- */

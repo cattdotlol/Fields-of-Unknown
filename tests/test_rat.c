@@ -44,6 +44,7 @@ static void TestTheyAppearAndStandOnSomething(void)
 
     Check("rats turn up", count > 0, true);
     Check("but never more than the pool", count <= RAT_MAX, true);
+    Check("the population reaches its target", count >= RAT_TARGET, true);
 
     /* None should have fallen through the world. */
     int fallen = 0;

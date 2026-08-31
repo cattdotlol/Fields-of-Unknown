@@ -9,6 +9,7 @@
 #include "world/weather.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #define TICK (1.0f / 60.0f)
 
@@ -186,6 +187,55 @@ static void TestSeasonsTurn(void)
     Check("temperature never snaps between frames", biggestJump < 0.02f, true);
 }
 
+/* Weather must come from WORLD_SEED alone. It used to share raylib's
+   global generator with the film grain, which draws hundreds of numbers
+   a frame - so the sky depended on whether the intro was on screen. */
+static void TestWeatherIsReproducible(void)
+{
+    puts("weather");
+
+    char first[32], second[32];
+
+    for (int pass = 0; pass < 2; pass++)
+    {
+        SeasonInit();
+        WeatherInit(20260831u);
+
+        char *out = (pass == 0) ? first : second;
+        int n = 0;
+
+        for (int f = 0; f < 60 * 400 && n < 31; f++)
+        {
+            /* Second pass churns the global RNG the way drawing does. */
+            if (pass == 1)
+            {
+                for (int g = 0; g < 300; g++) GetRandomValue(0, 1000);
+            }
+
+            SeasonUpdate(TICK);
+            WeatherUpdate(TICK);
+
+            /* The state index, not the name's first letter: DRY and
+               DRIZZLE both begin with D, so a name fingerprint cannot
+               tell them apart and the test would pass on anything. */
+            if (f % (60 * 20) == 0) out[n++] = (char)('0' + (int)WeatherCurrent());
+        }
+
+        out[n] = '\0';
+    }
+
+    printf("    %s vs %s\n", first, second);
+
+    Check("the same seed gives the same weather",
+          strcmp(first, second) == 0, true);
+
+    /* And that the fingerprint is worth comparing at all. */
+    bool varies = false;
+    for (int i = 1; first[i] != '\0'; i++) if (first[i] != first[0]) varies = true;
+
+    Check("the weather actually changes over the run", varies, true);
+}
+
 void SuiteVitals(void)
 {
     TestHungerIsTheClock();
@@ -195,4 +245,5 @@ void SuiteVitals(void)
     TestEverythingStaysInRange();
     TestStamina();
     TestSeasonsTurn();
+    TestWeatherIsReproducible();
 }
