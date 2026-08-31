@@ -39,6 +39,7 @@ static float sHold;        /* seconds left in this state */
 static float sWetness;
 static float sWind;
 static float sWindTarget;
+static float sGust;
 static float sTime;
 
 /* Lightning. A strike flashes immediately and the sound arrives later,
@@ -96,6 +97,7 @@ void WeatherInit(unsigned int seed)
     sTime = 0.0f;
     sWetness = 0.10f;   /* the ground starts dry; flooding is earned */
     sWind = 0.0f;
+    sGust = 0.0f;
     sFlash = 0.0f;
     sStrikeIn = 20.0f;
     sThunderIn = 0.0f;
@@ -120,8 +122,14 @@ void WeatherUpdate(float dt)
     sRain += (target - sRain) * RAIN_LERP * dt;
     sWind += (sWindTarget - sWind) * 0.20f * dt;
 
-    /* Gusts, so wind never sits perfectly still. */
-    float gust = sinf(sTime * 0.7f) * sinf(sTime * 0.23f) * 0.15f * sRain;
+    /* Gusts. Three rates that do not divide into each other, so it never
+       settles into an audible loop, and present in dry weather too - the
+       old version multiplied by rain, so a clear day was dead still. */
+    sGust = sinf(sTime * 0.53f) * 0.50f
+          + sinf(sTime * 1.31f) * 0.30f
+          + sinf(sTime * 2.70f) * 0.20f;
+
+    sGust *= 0.22f + sRain * 0.45f;
 
     if (sRain > WET_THRESHOLD) sWetness += (sRain - WET_THRESHOLD) * WET_FILL_RATE * dt;
     else                       sWetness -= WET_DRAIN_RATE * dt;
@@ -155,13 +163,20 @@ void WeatherUpdate(float dt)
         if (sThunderIn <= 0.0f) sThunderPending = true;
     }
 
-    sWind += gust * dt;
     if (sWind < -1.0f) sWind = -1.0f;
     if (sWind >  1.0f) sWind =  1.0f;
 }
 
 float WeatherRain(void)     { return sRain; }
-float WeatherWind(void)     { return sWind; }
+float WeatherWind(void)
+{
+    float w = sWind + sGust;
+
+    if (w < -1.0f) w = -1.0f;
+    if (w >  1.0f) w =  1.0f;
+
+    return w;
+}
 float WeatherWetness(void)  { return sWetness; }
 
 float WeatherWaterY(void)

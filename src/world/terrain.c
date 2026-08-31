@@ -3,6 +3,7 @@
 #include "world/worldgen.h"
 #include "world/season.h"
 #include "world/tree.h"
+#include "world/weather.h"
 #include "world/mushroom.h"
 #include "world/worldgen.h"
 
@@ -169,10 +170,41 @@ static float TreeRand(unsigned int v, unsigned int i)
     return (float)(TreeHash(v, i) & 0xFFFFu) / 65535.0f;
 }
 
+/* How far a point on a tree is pushed by the wind.
+
+   Displacement is a function of height above the base, so connected
+   segments stay connected - offsetting endpoints individually would pull
+   the tree apart. It goes with the square of height, which is roughly how
+   a tapering column bends: the trunk barely moves and the tips move a
+   lot. The height term inside the sine delays the motion further up, so
+   a gust visibly travels through the crown instead of the whole tree
+   twitching at once. */
+static float TreeSway(const Tree *t, float y, float phase, float flutter)
+{
+    float h = (t->baseY - y) / (t->height > 1.0f ? t->height : 1.0f);
+    if (h < 0.0f) h = 0.0f;
+    if (h > 1.4f) h = 1.4f;
+
+    float wind = WeatherWind();
+    float bend = h * h;
+
+    float time = (float)GetTime();
+
+    float lean = wind * 15.0f;
+    float swing = wind * 11.0f * sinf(time * 1.6f + phase - h * 1.8f);
+
+    /* Thin outer growth flutters faster than the branch carrying it. */
+    float shiver = flutter * (0.6f + fabsf(wind)) * sinf(time * 5.2f + phase + h * 4.0f);
+
+    return bend * (lean + swing) + shiver;
+}
+
 static void DrawTree(const Tree *t)
 {
     TreeBranch branches[TREE_MAX_BRANCHES];
     int count = TreeBuild(t, branches, TREE_MAX_BRANCHES);
+
+    float phase = (float)(t->variant & 1023u) * 0.0061f;
 
     Color bark   = (Color){ 30, 26, 30, 255 };
     Color barkLo = (Color){ 19, 17, 20, 255 };
@@ -205,8 +237,10 @@ static void DrawTree(const Tree *t)
             /* Taper along the segment, the way a real branch does. */
             float w = thick * (1.0f - f * 0.25f);
 
-            DrawRectangleRec((Rectangle){ b->from.x + dx * f - w * 0.5f,
-                                          b->from.y + dy * f - w * 0.5f, w, w },
+            float py = b->from.y + dy * f;
+            float px = b->from.x + dx * f + TreeSway(t, py, phase, 0.0f);
+
+            DrawRectangleRec((Rectangle){ px - w * 0.5f, py - w * 0.5f, w, w },
                              (b->depth < 2) ? bark : barkLo);
         }
     }
@@ -233,7 +267,10 @@ static void DrawTree(const Tree *t)
 
             Color c = (TreeRand(t->variant, salt + 900u) > 0.55f) ? leafHigh : leaf;
 
-            DrawRectangleRec((Rectangle){ cx + ox - r, cy + oy - r * 0.75f,
+            float ly = cy + oy;
+            float lx = cx + ox + TreeSway(t, ly, phase + (float)k * 0.7f, 2.4f);
+
+            DrawRectangleRec((Rectangle){ lx - r, ly - r * 0.75f,
                                           r * 2.0f, r * 1.5f }, c);
         }
     }
@@ -416,7 +453,9 @@ void TerrainDraw(float left, float right, Rectangle focus)
                 {
                     if (sinf(x * 0.37f) < 0.35f) continue;
 
-                    DrawRectangle((int)x, (int)(r.y - 3.0f), 3, 3, moss);
+                    float mossSway = WeatherWind() * 2.5f * sinf((float)GetTime() * 3.0f + x * 0.05f);
+
+                    DrawRectangle((int)(x + mossSway), (int)(r.y - 3.0f), 3, 3, moss);
                 }
                 break;
         }

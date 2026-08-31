@@ -33,6 +33,10 @@ static bool  sRoarReady;
 static Sound sImpact;
 static bool  sImpactReady;
 
+static Sound sGale;
+static bool  sGaleReady;
+static float sGaleLevel;
+
 static unsigned int sNoise = 0x9E3779B9u;
 
 static float WhiteNoise(void)
@@ -134,6 +138,12 @@ void AudioLoad(void)
     /* Nearly all crack and gone almost at once: a hit, not a rumble. */
     sImpact = GenerateThunder(0.95f, 0.30f, 13.0f);
     sImpactReady = true;
+
+    /* Wind: mid-band noise with almost no decay, so it sustains rather
+       than falling away like thunder does. Restarted as it runs out,
+       which is a cheap loop. */
+    sGale = GenerateThunder(0.02f, 0.140f, 0.02f);
+    sGaleReady = true;
 }
 
 void AudioImpact(float strength)
@@ -159,9 +169,11 @@ void AudioUnload(void)
 
     if (sRoarReady) UnloadSound(sRoar);
     if (sImpactReady) UnloadSound(sImpact);
+    if (sGaleReady) UnloadSound(sGale);
 
     sRoarReady = false;
     sImpactReady = false;
+    sGaleReady = false;
 
     sRainReady = false;
     sThunderReady = false;
@@ -194,6 +206,26 @@ void AudioUpdate(void)
 
             SetMusicVolume(sRain, volume);
             UpdateMusicStream(sRain);
+        }
+    }
+
+    /* --- wind ---------------------------------------------------------
+       Follows the gusts rather than the average, so a gust is heard
+       before it is seen. */
+    if (sGaleReady)
+    {
+        float want = fabsf(WeatherWind());
+
+        sGaleLevel += (want - sGaleLevel) * 1.4f * dt;
+
+        float volume = sGaleLevel * 0.55f * gSettings.sfxVolume;
+
+        if (volume > 0.02f)
+        {
+            SetSoundVolume(sGale, volume);
+            SetSoundPitch(sGale, 0.55f + sGaleLevel * 0.55f);
+
+            if (!IsSoundPlaying(sGale)) PlaySound(sGale);
         }
     }
 

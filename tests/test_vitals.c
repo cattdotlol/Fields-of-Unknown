@@ -262,6 +262,47 @@ static void TestMovementTuning(void)
     Check("with room to spare", window - rest > 5.0f, true);
 }
 
+/* Wind used to be multiplied by rainfall, so it only existed in storms
+   and everything that reacts to it stood still on a clear day. */
+static void TestWindMoves(void)
+{
+    puts("wind");
+
+    SeasonInit();
+    WeatherInit(11u);
+
+    float lowest = 2.0f, highest = -2.0f;
+    float previous = WeatherWind();
+    float sharpest = 0.0f;
+    int reversals = 0;
+
+    for (int i = 0; i < 60 * 240; i++)      /* four minutes */
+    {
+        SeasonUpdate(TICK);
+        WeatherUpdate(TICK);
+
+        float w = WeatherWind();
+
+        if (w < lowest) lowest = w;
+        if (w > highest) highest = w;
+
+        float step = w - previous;
+        if (step < 0.0f) step = -step;
+        if (step > sharpest) sharpest = step;
+
+        if ((w > 0.0f) != (previous > 0.0f)) reversals++;
+        previous = w;
+    }
+
+    printf("    range %.2f..%.2f, %d direction changes, sharpest step %.4f\n",
+           (double)lowest, (double)highest, reversals, (double)sharpest);
+
+    Check("the wind actually moves", highest - lowest > 0.2f, true);
+    Check("it blows both ways", lowest < 0.0f && highest > 0.0f, true);
+    Check("and stays inside its range", lowest >= -1.0f && highest <= 1.0f, true);
+    Check("without jumping between frames", sharpest < 0.05f, true);
+}
+
 void SuiteVitals(void)
 {
     TestHungerIsTheClock();
@@ -273,4 +314,5 @@ void SuiteVitals(void)
     TestSeasonsTurn();
     TestWeatherIsReproducible();
     TestMovementTuning();
+    TestWindMoves();
 }

@@ -1,5 +1,7 @@
 #include "gfx/scene_flood.h"
 
+#include "world/weather.h"
+
 #include "raylib.h"
 
 #include <math.h>
@@ -8,6 +10,7 @@
 #define RIPPLE_MAX   28
 #define STAR_COUNT  150
 #define STEAM_COUNT  14
+#define MOTE_COUNT   90
 
 #define WATER_LINE 0.63f    /* fraction of screen height */
 #define POD_X      0.46f    /* fraction of screen width at cameraX = 0 */
@@ -45,6 +48,17 @@ static Drop   sRain[RAIN_COUNT];
 static Ripple sRipples[RIPPLE_MAX];
 static Star   sStars[STAR_COUNT];
 
+/* Whatever the wind is carrying. The clearest signal that air is moving,
+   because unlike rain it blows sideways even on a dry day. */
+typedef struct Mote {
+    float x, y;
+    float drift;
+    float size;
+    float phase;
+} Mote;
+
+static Mote sMotes[MOTE_COUNT];
+
 static float sTime;
 static float sFlicker;
 
@@ -79,6 +93,15 @@ void FloodSceneInit(unsigned int seed)
         sStars[i].big = (Rand01() > 0.88f);
     }
 
+    for (int i = 0; i < MOTE_COUNT; i++)
+    {
+        sMotes[i].x = Rand01();
+        sMotes[i].y = Rand01();
+        sMotes[i].drift = 0.4f + Rand01() * 1.4f;
+        sMotes[i].size = 1.0f + Rand01() * 2.0f;
+        sMotes[i].phase = Rand01() * 6.28f;
+    }
+
     sTime = 0.0f;
 }
 
@@ -99,7 +122,7 @@ void FloodSceneUpdate(float dt)
     for (int i = 0; i < RAIN_COUNT; i++)
     {
         sRain[i].y += sRain[i].speed * dt;
-        sRain[i].x += sRain[i].speed * dt * 0.10f;
+        sRain[i].x += (0.04f + WeatherWind() * 0.34f) * sRain[i].speed * dt;
 
         if (sRain[i].y > WATER_LINE)
         {
@@ -123,6 +146,20 @@ void FloodSceneUpdate(float dt)
     for (int i = 0; i < RIPPLE_MAX; i++)
     {
         if (sRipples[i].life > 0.0f) sRipples[i].life -= dt * 1.4f;
+    }
+
+    /* Motes ride the wind and wrap around the screen. */
+    float wind = WeatherWind();
+
+    for (int i = 0; i < MOTE_COUNT; i++)
+    {
+        sMotes[i].x += wind * sMotes[i].drift * 0.22f * dt;
+        sMotes[i].y += sinf(sTime * 1.4f + sMotes[i].phase) * 0.012f * dt
+                     + 0.006f * dt;
+
+        if (sMotes[i].x > 1.05f) { sMotes[i].x = -0.05f; sMotes[i].y = Rand01(); }
+        if (sMotes[i].x < -0.05f) { sMotes[i].x = 1.05f; sMotes[i].y = Rand01(); }
+        if (sMotes[i].y > 1.02f) sMotes[i].y -= 1.04f;
     }
 
     sFlicker = 0.55f + 0.45f * sinf(sTime * 9.0f) * sinf(sTime * 2.3f);
@@ -309,6 +346,28 @@ static void DrawPod(float reveal, float w, float waterY, float cell, float camer
     }
 }
 
+static void DrawMotes(float reveal)
+{
+    float wind = WeatherWind();
+    float strength = fabsf(wind);
+    if (strength < 0.06f) return;
+
+    float w = (float)GetScreenWidth();
+    float h = (float)GetScreenHeight();
+    float cell = CellSize();
+
+    int shown = (int)((float)MOTE_COUNT * strength);
+
+    for (int i = 0; i < shown; i++)
+    {
+        float side = sMotes[i].size * cell;
+
+        DrawRectangle((int)(sMotes[i].x * w), (int)(sMotes[i].y * h),
+                      (int)side, (int)side,
+                      Fade(Mul((Color){ 168, 158, 132, 255 }, reveal), 0.10f + strength * 0.22f));
+    }
+}
+
 void FloodSceneDraw(float reveal, float rain, float cameraX, bool snow)
 {
     if (reveal < 0.0f) reveal = 0.0f;
@@ -387,6 +446,8 @@ void FloodSceneDraw(float reveal, float rain, float cameraX, bool snow)
                       Fade(Mul((Color){ 120, 175, 180, 255 }, reveal), sRipples[i].life * 0.35f));
     }
 
+    DrawMotes(reveal);
+
     for (int i = 0; i < drops; i++)
     {
         if (sRain[i].y > WATER_LINE) continue;
@@ -397,7 +458,8 @@ void FloodSceneDraw(float reveal, float rain, float cameraX, bool snow)
         if (snow)
         {
             /* Flakes drift and tumble instead of falling in streaks. */
-            float drift = sinf(sTime * 0.8f + (float)i * 0.7f) * cell * 6.0f;
+            float drift = sinf(sTime * 0.8f + (float)i * 0.7f) * cell * 6.0f
+                        + WeatherWind() * cell * 14.0f;
 
             DrawRectangle((int)(px + drift), (int)(py * 0.85f),
                           (int)(cell * 2.0f), (int)(cell * 2.0f),
@@ -405,8 +467,21 @@ void FloodSceneDraw(float reveal, float rain, float cameraX, bool snow)
         }
         else
         {
-            DrawRectangle((int)px, (int)py, (int)cell, (int)(sRain[i].len * fh),
-                          Fade(Mul((Color){ 150, 180, 190, 255 }, reveal), 0.18f + rain * 0.20f));
+            /* Drawn as a slanted streak, because rain in wind is not
+               vertical and a vertical streak makes wind unreadable. */
+            float streak = sRain[i].len * fh;
+            float lean = WeatherWind() * streak * 0.8f;
+
+            Color drop = Fade(Mul((Color){ 150, 180, 190, 255 }, reveal),
+                              0.18f + rain * 0.20f);
+
+            for (int seg = 0; seg < 3; seg++)
+            {
+                float f = (float)seg / 3.0f;
+
+                DrawRectangle((int)(px + lean * f), (int)(py + streak * f),
+                              (int)cell, (int)(streak / 3.0f + 1.0f), drop);
+            }
         }
     }
 }
