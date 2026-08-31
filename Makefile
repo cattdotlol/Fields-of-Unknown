@@ -63,7 +63,10 @@ $(WIN_RAYLIB):
 	  echo "      sudo dnf install mingw64-gcc"; echo; exit 1; }
 	@test -d vendor/raylib-win || \
 	  git clone --depth 1 --branch 5.5 https://github.com/raysan5/raylib.git vendor/raylib-win
-	$(MAKE) -C vendor/raylib-win/src PLATFORM=PLATFORM_DESKTOP OS=WINDOWS \
+	@# PLATFORM_OS, not OS: raylib's Makefile detects the host with uname
+	@# and will build GLFW's X11 backend otherwise.
+	$(MAKE) -C vendor/raylib-win/src clean || true
+	$(MAKE) -C vendor/raylib-win/src PLATFORM=PLATFORM_DESKTOP PLATFORM_OS=WINDOWS \
 	  CC=$(MINGW_CC) AR=$(MINGW_AR) RAYLIB_LIBTYPE=STATIC
 
 # -static pulls libgcc and winpthread in, so the result is one .exe with

@@ -2,14 +2,22 @@
 
 #include "raylib.h"
 
-/* windows.h must come first: GL/gl.h on Windows uses APIENTRY and
-   WINGDIAPI from it and will not compile on its own. */
-#if defined(_WIN32)
-    #define WIN32_LEAN_AND_MEAN
-    #include <windows.h>
-#endif
+#include "core/sysinfo_win32.h"
 
-#include <GL/gl.h>
+#if defined(_WIN32)
+    /* GL/gl.h needs windows.h, and windows.h collides with raylib.h.
+       glGetString is the only entry point wanted here, so it is declared
+       directly - opengl32 is already linked. */
+    typedef unsigned int GLenum;
+    typedef unsigned char GLubyte;
+    __declspec(dllimport) const GLubyte * __stdcall glGetString(GLenum name);
+
+    #define GL_VENDOR   0x1F00
+    #define GL_RENDERER 0x1F01
+    #define GL_VERSION  0x1F02
+#else
+    #include <GL/gl.h>
+#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -43,41 +51,15 @@ static void Trim(char *s)
 
 static void ReadCpu(void)
 {
-    SYSTEM_INFO info;
-    GetSystemInfo(&info);
-    gSysInfo.cpuThreads = (int)info.dwNumberOfProcessors;
+    gSysInfo.cpuThreads = SysWin32Threads();
+    SysWin32CpuName(gSysInfo.cpu, (int)sizeof(gSysInfo.cpu));
 
-    /* The friendly CPU name only exists in the registry. */
-    HKEY key;
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE,
-                      "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
-                      0, KEY_READ, &key) == ERROR_SUCCESS)
-    {
-        DWORD size = (DWORD)sizeof(gSysInfo.cpu);
-        DWORD type = 0;
-
-        if (RegQueryValueExA(key, "ProcessorNameString", NULL, &type,
-                             (LPBYTE)gSysInfo.cpu, &size) == ERROR_SUCCESS &&
-            type == REG_SZ)
-        {
-            gSysInfo.cpu[sizeof(gSysInfo.cpu) - 1] = '\0';
-            Trim(gSysInfo.cpu);
-        }
-
-        RegCloseKey(key);
-    }
+    if (gSysInfo.cpu[0] != '\0') Trim(gSysInfo.cpu);
 }
 
 static void ReadMemory(void)
 {
-    MEMORYSTATUSEX status;
-    status.dwLength = sizeof(status);
-
-    if (GlobalMemoryStatusEx(&status))
-    {
-        snprintf(gSysInfo.memory, sizeof(gSysInfo.memory), "%.1f GB",
-                 (double)status.ullTotalPhys / (1024.0 * 1024.0 * 1024.0));
-    }
+    SysWin32Memory(gSysInfo.memory, (int)sizeof(gSysInfo.memory));
 }
 
 #elif defined(__linux__)
