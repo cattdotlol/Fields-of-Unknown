@@ -25,10 +25,14 @@
 #define TREE_MAX_BRANCHES 128
 
 typedef enum TreeSpecies {
-    TREE_OAK = 0,       /* wide, spreading, heavy canopy */
-    TREE_PINE,          /* narrow, conical, tiered        */
-    TREE_POPLAR,        /* columnar, near-vertical        */
-    TREE_GNARLED,       /* alien, twisted, sparse         */
+    TREE_OAK = 0,       /* broad, spreading, heavy crown      */
+    TREE_PINE,          /* conical, short laterals            */
+    TREE_POPLAR,        /* columnar, almost vertical          */
+    TREE_BIRCH,         /* slender, pale bark, fine twigs     */
+    TREE_WILLOW,        /* weeping - branches hang downward   */
+    TREE_CYPRESS,       /* swamp tree, tall and narrow        */
+    TREE_MANGROVE,      /* stilt roots, stands in the water   */
+    TREE_GNARLED,       /* dead, twisted, bare                */
     TREE_SPECIES_COUNT
 } TreeSpecies;
 
@@ -41,6 +45,11 @@ typedef struct TreeBranch {
 } TreeBranch;
 
 TreeSpecies TreeSpeciesOf(const Tree *tree);
+const char *TreeSpeciesName(TreeSpecies species);
+
+/* Bark differs enough between species to be worth colouring: birch is
+   pale, mangrove is dark and red. */
+Color TreeBarkColour(TreeSpecies species, int depth);
 
 /* Fills `out` with the whole tree and returns how many branches it used.
    Deterministic: the same tree always grows the same way. */

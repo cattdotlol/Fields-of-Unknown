@@ -1,5 +1,7 @@
 #include "world/tree.h"
 
+#include "world/weather.h"
+
 #include <math.h>
 
 typedef struct Species {
@@ -16,11 +18,19 @@ static const Species SPECIES[TREE_SPECIES_COUNT] = {
     /* A tall leader with short laterals is what fills a canopy out. The
        two ratios being one number is what made every tree a lollipop.
 
+       Negative gravity is the interesting one: instead of easing back
+       toward vertical, branches are pushed further from it every
+       generation, which is what makes a willow weep.
+
        spread  leader  side  depth  kids  gravity  wobble */
-    {  0.90f,  0.78f,  0.76f,    6,    2,   0.04f,  0.22f },   /* oak     */
-    {  0.95f,  0.88f,  0.46f,    6,    2,   0.14f,  0.08f },   /* pine    */
-    {  0.40f,  0.90f,  0.50f,    6,    2,   0.22f,  0.06f },   /* poplar  */
-    {  1.15f,  0.74f,  0.74f,    5,    2,  -0.06f,  0.50f },   /* gnarled */
+    {  0.90f,  0.78f,  0.76f,    6,    2,   0.04f,  0.22f },   /* oak      */
+    {  0.95f,  0.88f,  0.46f,    6,    2,   0.14f,  0.08f },   /* pine     */
+    {  0.40f,  0.90f,  0.50f,    6,    2,   0.22f,  0.06f },   /* poplar   */
+    {  0.62f,  0.86f,  0.58f,    6,    2,   0.10f,  0.20f },   /* birch    */
+    {  0.72f,  0.72f,  0.82f,    6,    2,  -0.30f,  0.26f },   /* willow   */
+    {  0.34f,  0.92f,  0.40f,    6,    2,   0.26f,  0.05f },   /* cypress  */
+    {  1.05f,  0.70f,  0.80f,    5,    2,  -0.08f,  0.34f },   /* mangrove */
+    {  1.15f,  0.74f,  0.74f,    5,    2,  -0.06f,  0.50f },   /* gnarled  */
 };
 
 static unsigned int Hash(unsigned int a, unsigned int b)
@@ -39,11 +49,82 @@ static float Noise(unsigned int variant, unsigned int path, unsigned int salt)
     return (float)(Hash(variant ^ path, salt) & 0xFFFFu) / 65535.0f - 0.5f;
 }
 
+const char *TreeSpeciesName(TreeSpecies species)
+{
+    switch (species)
+    {
+        case TREE_OAK:      return "OAK";
+        case TREE_PINE:     return "PINE";
+        case TREE_POPLAR:   return "POPLAR";
+        case TREE_BIRCH:    return "BIRCH";
+        case TREE_WILLOW:   return "WILLOW";
+        case TREE_CYPRESS:  return "CYPRESS";
+        case TREE_MANGROVE: return "MANGROVE";
+        default:            return "DEAD";
+    }
+}
+
+/* Species follows the ground it is standing on, the way it does in life:
+   willow, cypress and mangrove want their feet wet, pine and birch want
+   drainage, oak and poplar take the middle. */
 TreeSpecies TreeSpeciesOf(const Tree *tree)
 {
     if (tree->dead) return TREE_GNARLED;
 
-    return (TreeSpecies)(Hash(tree->variant, 77u) % (unsigned int)TREE_SPECIES_COUNT);
+    /* 0 is well above the flood, 1 is at or under it. */
+    float flood = WeatherMaxWaterY();
+    float wet = (tree->baseY - (flood - 90.0f)) / 120.0f;
+
+    if (wet < 0.0f) wet = 0.0f;
+    if (wet > 1.0f) wet = 1.0f;
+
+    unsigned int roll = Hash(tree->variant, 77u) % 100u;
+
+    if (wet > 0.62f)
+    {
+        /* Standing water. */
+        if (roll < 40u) return TREE_MANGROVE;
+        if (roll < 75u) return TREE_WILLOW;
+        return TREE_CYPRESS;
+    }
+
+    if (wet > 0.28f)
+    {
+        /* Damp ground. */
+        if (roll < 30u) return TREE_WILLOW;
+        if (roll < 55u) return TREE_OAK;
+        if (roll < 80u) return TREE_POPLAR;
+        return TREE_CYPRESS;
+    }
+
+    /* Dry and drained. */
+    if (roll < 34u) return TREE_PINE;
+    if (roll < 62u) return TREE_BIRCH;
+    if (roll < 86u) return TREE_OAK;
+    return TREE_POPLAR;
+}
+
+Color TreeBarkColour(TreeSpecies species, int depth)
+{
+    switch (species)
+    {
+        case TREE_BIRCH:
+            return (depth < 2) ? (Color){ 176, 174, 166, 255 }
+                               : (Color){ 132, 130, 124, 255 };
+
+        case TREE_MANGROVE:
+            return (depth < 2) ? (Color){ 52, 32, 30, 255 }
+                               : (Color){ 38, 24, 24, 255 };
+
+        case TREE_PINE:
+        case TREE_CYPRESS:
+            return (depth < 2) ? (Color){ 44, 32, 28, 255 }
+                               : (Color){ 32, 24, 22, 255 };
+
+        default:
+            return (depth < 2) ? (Color){ 30, 26, 30, 255 }
+                               : (Color){ 19, 17, 20, 255 };
+    }
 }
 
 typedef struct Builder {
@@ -126,6 +207,30 @@ int TreeBuild(const Tree *tree, TreeBranch *out, int max)
     float lean = Noise(tree->variant, 1u, 3u) * 0.18f;
     float trunk = tree->height * 0.30f;
     float thickness = 3.0f + tree->height * 0.055f;
+
+    /* Mangroves are held clear of the water on stilt roots, which is the
+       whole reason they can live in it. */
+    if (species == TREE_MANGROVE)
+    {
+        float lift = 26.0f + tree->height * 0.10f;
+        Vector2 crown = { tree->x, tree->baseY - lift };
+
+        for (int i = 0; i < 4 && b.count < b.max; i++)
+        {
+            float side = ((i & 1) != 0) ? 1.0f : -1.0f;
+            float reach = (14.0f + (float)(i / 2) * 12.0f) * side;
+
+            b.out[b.count].from = crown;
+            b.out[b.count].to = (Vector2){ tree->x + reach, tree->baseY };
+            b.out[b.count].thickness = thickness * 0.55f;
+            b.out[b.count].depth = 0;
+            b.out[b.count].tip = false;
+            b.count++;
+        }
+
+        Grow(&b, crown, lean, trunk, thickness, 0, 1u);
+        return b.count;
+    }
 
     Grow(&b, (Vector2){ tree->x, tree->baseY }, lean, trunk, thickness, 0, 1u);
 

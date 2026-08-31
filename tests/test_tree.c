@@ -6,6 +6,8 @@
 
 #include "world/tree.h"
 #include "world/worldgen.h"
+#include "world/weather.h"
+#include "world/season.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -14,7 +16,7 @@ static Tree Make(unsigned int variant, bool dead)
 {
     Tree t = { 0 };
     t.x = 0.0f;
-    t.baseY = 0.0f;
+    t.baseY = 430.0f;              /* dry ground */
     t.height = 190.0f;
     t.spread = 40.0f;
     t.variant = variant;
@@ -68,18 +70,25 @@ static void TestBranchesThinCorrectly(void)
     Check("twigs are much finer than the trunk", trunk > thinnest * 2.0f, true);
 }
 
-/* Species is a silhouette, not a label: a poplar must be narrower than
+/* Species is a silhouette, not a label: a cypress must be narrower than
    an oak or the parameters are doing nothing. */
 static void TestSpeciesDiffer(void)
 {
+    SeasonInit();
+    WeatherInit(3u);
+
     float span[TREE_SPECIES_COUNT] = { 0 };
     int found[TREE_SPECIES_COUNT] = { 0 };
 
-    for (unsigned int v = 0; v < 20000; v++)
+    for (unsigned int v = 0; v < 60000; v++)
     {
-        Tree t = Make(v, false);
-        TreeSpecies sp = TreeSpeciesOf(&t);
+        Tree t = Make(v, (v % 23) == 0);
 
+        /* Sweep the ground from dry to flooded, since species follows
+           wetness. */
+        t.baseY = 400.0f + (float)(v % 9) * 30.0f;
+
+        TreeSpecies sp = TreeSpeciesOf(&t);
         if (found[sp] >= 40) continue;
 
         TreeBranch b[TREE_MAX_BRANCHES];
@@ -96,18 +105,85 @@ static void TestSpeciesDiffer(void)
         found[sp]++;
     }
 
+    bool all = true;
     for (int i = 0; i < TREE_SPECIES_COUNT; i++)
     {
-        if (found[i] > 0) span[i] /= (float)found[i];
+        if (found[i] == 0) { all = false; continue; }
+        span[i] /= (float)found[i];
     }
 
-    printf("    average crown width: oak %.0f  pine %.0f  poplar %.0f  gnarled %.0f\n",
-           (double)span[TREE_OAK], (double)span[TREE_PINE],
-           (double)span[TREE_POPLAR], (double)span[TREE_GNARLED]);
+    printf("    crown widths:");
+    for (int i = 0; i < TREE_SPECIES_COUNT; i++)
+    {
+        printf(" %s %.0f", TreeSpeciesName((TreeSpecies)i), (double)span[i]);
+    }
+    printf("\n");
 
-    Check("a poplar is narrower than an oak", span[TREE_POPLAR] < span[TREE_OAK], true);
-    Check("a gnarled tree is the widest", span[TREE_GNARLED] > span[TREE_POPLAR], true);
-    Check("every species gets grown", found[0] && found[1] && found[2] && found[3], true);
+    Check("every species grows somewhere", all, true);
+    Check("a cypress is narrower than an oak", span[TREE_CYPRESS] < span[TREE_OAK], true);
+    Check("a willow spreads wider than a poplar",
+          span[TREE_WILLOW] > span[TREE_POPLAR], true);
+}
+
+/* Species follows the ground, the way it does in life. */
+static void TestSpeciesFollowTheWater(void)
+{
+    SeasonInit();
+    WeatherInit(3u);
+
+    int wetLovers = 0, dryLovers = 0;
+
+    for (unsigned int v = 0; v < 3000; v++)
+    {
+        Tree wet = Make(v, false);
+        wet.baseY = WeatherMaxWaterY() + 40.0f;        /* under the flood */
+
+        TreeSpecies s = TreeSpeciesOf(&wet);
+        if (s == TREE_MANGROVE || s == TREE_WILLOW || s == TREE_CYPRESS) wetLovers++;
+
+        Tree dry = Make(v, false);
+        dry.baseY = WeatherMaxWaterY() - 260.0f;       /* high and drained */
+
+        TreeSpecies d = TreeSpeciesOf(&dry);
+        if (d == TREE_PINE || d == TREE_BIRCH || d == TREE_OAK || d == TREE_POPLAR) dryLovers++;
+    }
+
+    printf("    of 3000: %d wet-ground trees are water species, "
+           "%d dry-ground are not\n", wetLovers, dryLovers);
+
+    Check("flooded ground grows water species", wetLovers == 3000, true);
+    Check("drained ground grows the others", dryLovers == 3000, true);
+}
+
+/* A mangrove is held out of the water on stilt roots. */
+static void TestMangrovesHaveRoots(void)
+{
+    SeasonInit();
+    WeatherInit(3u);
+
+    for (unsigned int v = 0; v < 60000; v++)
+    {
+        Tree t = Make(v, false);
+        t.baseY = WeatherMaxWaterY() + 40.0f;
+
+        if (TreeSpeciesOf(&t) != TREE_MANGROVE) continue;
+
+        TreeBranch b[TREE_MAX_BRANCHES];
+        int n = TreeBuild(&t, b, TREE_MAX_BRANCHES);
+
+        /* Roots run downward, back to the ground the trunk lifts off. */
+        int roots = 0;
+        for (int i = 0; i < n; i++)
+        {
+            if (b[i].to.y > b[i].from.y + 8.0f) roots++;
+        }
+
+        printf("    mangrove: %d branches, %d of them roots\n", n, roots);
+        Check("a mangrove stands on stilt roots", roots >= 4, true);
+        return;
+    }
+
+    Check("found a mangrove to check", false, true);
 }
 
 static void TestDeterminism(void)
@@ -137,5 +213,7 @@ void SuiteTree(void)
     TestRecursionIsBounded();
     TestBranchesThinCorrectly();
     TestSpeciesDiffer();
+    TestSpeciesFollowTheWater();
+    TestMangrovesHaveRoots();
     TestDeterminism();
 }

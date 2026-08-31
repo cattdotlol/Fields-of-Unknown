@@ -206,8 +206,7 @@ static void DrawTree(const Tree *t)
 
     float phase = (float)(t->variant & 1023u) * 0.0061f;
 
-    Color bark   = (Color){ 30, 26, 30, 255 };
-    Color barkLo = (Color){ 19, 17, 20, 255 };
+    TreeSpecies species = TreeSpeciesOf(t);
 
     Color leaf, leafHigh;
     SeasonFoliage(&leaf, &leafHigh);
@@ -241,7 +240,7 @@ static void DrawTree(const Tree *t)
             float px = b->from.x + dx * f + TreeSway(t, py, phase, 0.0f);
 
             DrawRectangleRec((Rectangle){ px - w * 0.5f, py - w * 0.5f, w, w },
-                             (b->depth < 2) ? bark : barkLo);
+                             TreeBarkColour(species, b->depth));
         }
     }
 
