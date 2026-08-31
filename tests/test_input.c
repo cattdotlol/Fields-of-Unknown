@@ -27,6 +27,30 @@ static void TestDefaults(void)
     Check("jumping is rebindable", InputActionRebindable(ACT_JUMP), true);
 }
 
+/* Every action needs a label, or the controls screen shows a neighbour's
+   name - or nothing at all. */
+static void TestEveryActionIsNamed(void)
+{
+    int unnamed = 0, duplicated = 0;
+
+    for (int a = 0; a < ACT_COUNT; a++)
+    {
+        const char *name = InputActionName((InputAction)a);
+
+        if (name == NULL || name[0] == '\0' || strcmp(name, "?") == 0) unnamed++;
+
+        for (int b = a + 1; b < ACT_COUNT; b++)
+        {
+            if (strcmp(name, InputActionName((InputAction)b)) == 0) duplicated++;
+        }
+    }
+
+    Check("every action has a name", unnamed == 0, true);
+    Check("no two actions share a name", duplicated == 0, true);
+    Check("eat is named correctly",
+          strcmp(InputActionName(ACT_EAT), "EAT") == 0, true);
+}
+
 static void TestKeyNames(void)
 {
     Check("letters name themselves", strcmp(InputKeyName(KEY_A), "A") == 0, true);
@@ -77,6 +101,7 @@ static void TestBindingsSurviveASave(void)
 void SuiteInput(void)
 {
     TestDefaults();
+    TestEveryActionIsNamed();
     TestKeyNames();
     TestConflictDetection();
     TestBindingsSurviveASave();

@@ -2,6 +2,7 @@
 
 #include "raylib.h"
 
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -49,15 +50,29 @@ void InputInit(void)
     InputResetDefaults();
 }
 
+/* Designated initialisers, so inserting an action into the enum cannot
+   silently shift every label after it - which is exactly what happened
+   when ACT_EAT was added and the eat row started calling itself
+   "CONFIRM". */
 static const char *ACTION_NAMES[ACT_COUNT] = {
-    "MOVE LEFT", "MOVE RIGHT", "LOOK UP", "CROUCH / DOWN",
-    "RUN", "SNEAK", "JUMP", "SENSE",
-    "CONFIRM", "CANCEL", "DEBUG",
+    [ACT_LEFT]    = "MOVE LEFT",
+    [ACT_RIGHT]   = "MOVE RIGHT",
+    [ACT_UP]      = "LOOK UP",
+    [ACT_DOWN]    = "CROUCH / DOWN",
+    [ACT_RUN]     = "RUN",
+    [ACT_CROUCH]  = "SNEAK",
+    [ACT_JUMP]    = "JUMP",
+    [ACT_SENSE]   = "SENSE",
+    [ACT_EAT]     = "EAT",
+    [ACT_CONFIRM] = "CONFIRM",
+    [ACT_CANCEL]  = "CANCEL",
+    [ACT_DEBUG]   = "DEBUG",
 };
 
 const char *InputActionName(InputAction action)
 {
     if (action < 0 || action >= ACT_COUNT) return "?";
+    if (ACTION_NAMES[action] == NULL) return "?";
 
     return ACTION_NAMES[action];
 }
