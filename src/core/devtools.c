@@ -24,6 +24,7 @@ bool DevLighting(void) { return true; }
 #include "entity/vitals.h"
 #include "ui/theme.h"
 #include "world/season.h"
+#include "world/daylight.h"
 #include "world/terrain.h"
 #include "world/weather.h"
 #include "world/worldgen.h"
@@ -38,6 +39,7 @@ typedef enum Row {
     ROW_LIGHTS,
     ROW_WEATHER,
     ROW_SEASON,
+    ROW_TIME,
     ROW_WATER,
     ROW_HEAL,
     ROW_SPAWN_RAT,
@@ -93,6 +95,11 @@ static void Adjust(int delta)
             break;
         }
 
+        case ROW_TIME:
+            /* Fine scrub; Enter jumps a whole phase. */
+            DaylightSetTime(DaylightTime() + (float)delta * 0.02f + 1.0f);
+            break;
+
         case ROW_WATER:
             WeatherSetWetness(WeatherWetness() + (float)delta * 0.1f);
             break;
@@ -120,6 +127,8 @@ static void Activate(void)
         case ROW_AI:     sAI = !sAI; break;
         case ROW_LIGHTS: sLights = !sLights; break;
 
+        case ROW_TIME:   DaylightSkip(1); break;
+
         case ROW_HEAL:   VitalsReset(); break;
 
         case ROW_SPAWN_RAT:     RatsForceSpawn(CatPosition().x + 120.0f); break;
@@ -140,6 +149,8 @@ static const char *ValueFor(Row row)
         case ROW_LIGHTS:  return sLights ? "ON" : "off";
         case ROW_WEATHER: return WEATHER_NAMES[WeatherCurrent()];
         case ROW_SEASON:  return SEASON_NAMES[SeasonCurrent()];
+        case ROW_TIME:    return TextFormat("day %d, %s", DaylightDay(),
+                                            DaylightPhaseName());
         case ROW_WATER:   return TextFormat("%.0f%%", (double)(WeatherWetness() * 100.0f));
         case ROW_WARP:    return TextFormat("chunk %d",
                                             (int)floorf(CatPosition().x / CHUNK_WIDTH));
@@ -147,10 +158,22 @@ static const char *ValueFor(Row row)
     }
 }
 
+/* Named, not positional: inserting a row used to shift every label by
+   one and nothing complained. */
 static const char *LABELS[ROW_COUNT] = {
-    "GOD MODE", "FREEZE WORLD", "HITBOXES", "SHOW AI", "LIGHTING",
-    "WEATHER", "SEASON", "WATER LEVEL",
-    "REFILL VITALS", "SPAWN RAT", "SPAWN STALKER", "WARP",
+    [ROW_GOD]            = "GOD MODE",
+    [ROW_FREEZE]         = "FREEZE WORLD",
+    [ROW_HITBOX]         = "HITBOXES",
+    [ROW_AI]             = "SHOW AI",
+    [ROW_LIGHTS]         = "LIGHTING",
+    [ROW_WEATHER]        = "WEATHER",
+    [ROW_SEASON]         = "SEASON",
+    [ROW_TIME]           = "TIME OF DAY",
+    [ROW_WATER]          = "WATER LEVEL",
+    [ROW_HEAL]           = "REFILL VITALS",
+    [ROW_SPAWN_RAT]      = "SPAWN RAT",
+    [ROW_SPAWN_STALKER]  = "SPAWN STALKER",
+    [ROW_WARP]           = "WARP",
 };
 
 bool DevToolsUpdate(float dt)

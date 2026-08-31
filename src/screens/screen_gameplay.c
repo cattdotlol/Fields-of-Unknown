@@ -20,6 +20,7 @@
 #include "world/mushroom.h"
 #include "world/ocean.h"
 #include "world/season.h"
+#include "world/daylight.h"
 #include "world/weather.h"
 
 #include "raylib.h"
@@ -63,8 +64,14 @@ static float sLastHealth;
 /* Everything a fresh run resets, in one place. Death, the debug reroll
    and startup all go through here - they used to hand-roll the same
    list, and every new system was another line to forget. */
+static float AmbientTarget(void);
+
 static void RestartRun(void)
 {
+    /* Every run starts at first light on day one, however long the player
+       sat on the title screen. */
+    DaylightInit();
+
     CatSpawn(WorldSpawnPoint());
     TerrainStream(CatPosition().x);
 
@@ -77,8 +84,10 @@ static void RestartRun(void)
     sCamNow = CatPosition();
     sCamNow.y -= 24.0f;
 
-    sAmbient = 0.4f;
-    sAmbientTarget = 0.4f;
+    /* Open the eyes already adjusted, or the first second of a run is a
+       fade from the wrong brightness. */
+    sAmbientTarget = AmbientTarget();
+    sAmbient = sAmbientTarget;
     sCamPrev = sCamNow;
     sCam.target = sCamNow;
 
@@ -136,34 +145,12 @@ static void CameraApply(void)
    between two values the instant a branch or a fire escape crossed a
    ten-unit column above the cat. Several rays, each weighted by how low
    the ceiling is, gives something that moves smoothly instead. */
-#define COVER_RAYS   5
-#define COVER_REACH  320.0f
 
 static float CoverageAbove(void)
 {
-    Vector2 p = CatPosition();
-    float covered = 0.0f;
-
-    for (int i = 0; i < COVER_RAYS; i++)
-    {
-        float t = (float)i / (float)(COVER_RAYS - 1);
-        float ox = (t - 0.5f) * 52.0f;
-
-        for (float h = 24.0f; h <= COVER_REACH; h += 42.0f)
-        {
-            Rectangle probe = { p.x + ox - 3.0f, p.y - h, 6.0f, 10.0f };
-
-            if (TerrainOverlaps(probe))
-            {
-                /* A low roof encloses you more than a distant one. */
-                covered += 1.0f - (h / COVER_REACH) * 0.45f;
-                break;
-            }
-        }
-    }
-
-    return covered / (float)COVER_RAYS;
+    return TerrainCoverAbove(CatPosition());
 }
+
 
 /* Where the light should settle, given where the cat is standing. */
 static float AmbientTarget(void)
@@ -171,6 +158,10 @@ static float AmbientTarget(void)
     float coverage = CoverageAbove();
 
     float target = 0.14f + (0.46f - 0.14f) * (1.0f - coverage);
+
+    /* All of that light came from the sky, so all of it goes when the sky
+       does. A little is kept back so night is dark rather than blank. */
+    target *= 0.16f + 0.84f * DaylightBrightness();
 
     target -= WeatherRain() * 0.10f;
     target -= (1.0f - SeasonTemperature()) * 0.06f;

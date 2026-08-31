@@ -6,6 +6,8 @@
 #include "entity/vitals.h"
 #include "entity/cat.h"
 #include "world/season.h"
+#include "world/daylight.h"
+#include "world/terrain.h"
 #include "world/weather.h"
 
 #include <stdio.h>
@@ -303,6 +305,125 @@ static void TestWindMoves(void)
     Check("without jumping between frames", sharpest < 0.05f, true);
 }
 
+
+/* --- nights ------------------------------------------------------------
+   Night is the game's only real teacher: nothing tells the cat to get
+   under something, so the cost of not doing it has to be legible in the
+   numbers. These pin the shape - a summer night out is survivable, a
+   winter one is not, and a roof changes both. */
+
+static bool FindSpot(bool roofed, Vector2 *out)
+{
+    for (float x = -6000.0f; x < 6000.0f; x += 7.0f)
+    {
+        TerrainStream(x);
+
+        for (float y = 200.0f; y < 620.0f; y += 7.0f)
+        {
+            Vector2 p = { x, y };
+            Rectangle body = { x - 9.0f, y - 18.0f, 18.0f, 18.0f };
+
+            if (TerrainOverlaps(body)) continue;
+
+            float c = TerrainCoverAbove(p);
+            if (roofed ? (c > 0.92f) : (c < 0.02f)) { *out = p; return true; }
+        }
+    }
+    return false;
+}
+
+/* Warmth left at first light, or -1 if the cat did not see it. */
+static float NightOut(Season season, Vector2 where)
+{
+    SeasonSet(season);
+    WeatherForceState(WEATHER_DRY);
+    VitalsReset();
+    DaylightInit();
+    DaylightSetTime(0.78f);              /* nightfall */
+    CatSpawn(where);
+    TerrainStream(where.x);
+
+    int ticks = (int)(0.52f * DAY_LENGTH * 60.0f);
+
+    for (int i = 0; i < ticks; i++)
+    {
+        VitalsUpdate(1.0f / 60.0f);
+        DaylightUpdate(1.0f / 60.0f);
+    }
+
+    return gVitals.dead ? -1.0f : gVitals.warmth;
+}
+
+static void TestNightsCostSomething(void)
+{
+    Vector2 open, roofed;
+
+    if (!FindSpot(false, &open) || !FindSpot(true, &roofed))
+    {
+        Check("found somewhere open and somewhere roofed", false, true);
+        return;
+    }
+
+    float summerOut = NightOut(SEASON_SUMMER, open);
+    float autumnOut = NightOut(SEASON_AUTUMN, open);
+    float winterOut = NightOut(SEASON_WINTER, open);
+    float winterIn  = NightOut(SEASON_WINTER, roofed);
+
+    printf("    a night out: summer %.2f, autumn %.2f, winter %s"
+           " (winter under a roof %.2f)\n",
+           (double)summerOut, (double)autumnOut,
+           winterOut < 0.0f ? "fatal" : "survived", (double)winterIn);
+
+    Check("a summer night out is survivable", summerOut > 0.35f, true);
+    Check("but it still costs heat", summerOut < 0.75f, true);
+    Check("an autumn night out nearly finishes the cat",
+          autumnOut > 0.0f && autumnOut < 0.30f, true);
+    Check("a winter night in the open kills", winterOut < 0.0f, true);
+    Check("the same night under a roof does not", winterIn > 0.5f, true);
+}
+
+static void TestShelterIsWorthFinding(void)
+{
+    Vector2 open, roofed;
+
+    if (!FindSpot(false, &open) || !FindSpot(true, &roofed))
+    {
+        Check("found somewhere open and somewhere roofed", false, true);
+        return;
+    }
+
+    float out = NightOut(SEASON_SPRING, open);
+    float in  = NightOut(SEASON_SPRING, roofed);
+
+    printf("    spring night: %.2f in the open, %.2f under a roof\n",
+           (double)out, (double)in);
+
+    Check("a roof is plainly better than none", in > out + 0.3f, true);
+}
+
+/* Daylight must not cost heat, or the cat freezes at noon. */
+static void TestDaytimeIsFree(void)
+{
+    Vector2 open;
+    if (!FindSpot(false, &open)) { Check("found open ground", false, true); return; }
+
+    SeasonSet(SEASON_SPRING);
+    WeatherForceState(WEATHER_DRY);
+    VitalsReset();
+    DaylightInit();
+    DaylightSetTime(0.5f);               /* noon */
+    CatSpawn(open);
+    TerrainStream(open.x);
+
+    float before = gVitals.warmth;
+    for (int i = 0; i < 60 * 60; i++) VitalsUpdate(1.0f / 60.0f);
+
+    printf("    an hour at noon: warmth %.2f -> %.2f\n",
+           (double)before, (double)gVitals.warmth);
+
+    Check("noon does not chill the cat", gVitals.warmth >= before, true);
+}
+
 void SuiteVitals(void)
 {
     TestHungerIsTheClock();
@@ -315,4 +436,14 @@ void SuiteVitals(void)
     TestWeatherIsReproducible();
     TestMovementTuning();
     TestWindMoves();
+
+    TestNightsCostSomething();
+    TestShelterIsWorthFinding();
+    TestDaytimeIsFree();
+
+    /* These leave the world at a hard hour in a hard season. Put it back,
+       or every suite after this one runs at midnight in winter. */
+    DaylightInit();
+    SeasonSet(SEASON_SPRING);
+    WeatherForceState(WEATHER_DRY);
 }

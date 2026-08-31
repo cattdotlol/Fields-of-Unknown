@@ -1,4 +1,6 @@
 #include "entity/stalker.h"
+
+#include "world/daylight.h"
 #include "entity/cat.h"
 #include "entity/vitals.h"
 #include "world/physics.h"
@@ -227,6 +229,15 @@ static void Steer(Stalker *s, float wanted, float accel, float dt)
     s->body.vel.x += diff;
 }
 
+/* It owns the dark. In daylight it keeps its distance and gives up
+   quickly; after sundown it hears further and stays interested far
+   longer - and a full moon is genuinely safer than a new one. */
+static float Boldness(void)
+{
+    float b = 1.0f - DaylightBrightness();
+    return (b < 0.0f) ? 0.0f : b;
+}
+
 static void UpdateOne(Stalker *s, float dt, Vector2 catPos, float catNoise)
 {
     BodyBeginTick(&s->body);
@@ -239,10 +250,14 @@ static void UpdateOne(Stalker *s, float dt, Vector2 catPos, float catNoise)
     if (s->cooldown > 0.0f) s->cooldown -= dt;
 
     /* --- hearing: the cat's own noise is what draws it -------------- */
-    if (distance < HEAR_RANGE && catNoise > 0.01f)
+    float bold = Boldness();
+    float hearing = HEAR_RANGE * (1.0f + bold * 0.60f);
+
+    if (distance < hearing && catNoise > 0.01f)
     {
-        float closeness = 1.0f - (distance / HEAR_RANGE);
-        float gain = catNoise * closeness * INTEREST_GAIN * dt;
+        float closeness = 1.0f - (distance / hearing);
+        float gain = catNoise * closeness * INTEREST_GAIN
+                     * (1.0f + bold * 0.55f) * dt;
 
         if (gain > 0.0f)
         {
@@ -251,7 +266,7 @@ static void UpdateOne(Stalker *s, float dt, Vector2 catPos, float catNoise)
         }
     }
 
-    s->interest -= INTEREST_FALL * dt;
+    s->interest -= INTEREST_FALL * (1.0f - bold * 0.55f) * dt;
 
     if (s->interest < 0.0f) s->interest = 0.0f;
     if (s->interest > 1.4f) s->interest = 1.4f;
@@ -401,8 +416,11 @@ void StalkersFixedUpdate(float dt)
         alive++;
     }
 
-    /* One at a time, and never in the first few seconds of a run. */
-    if (sElapsed > GRACE && alive < STALKER_MAX && Rand01() < 0.004f)
+    /* One at a time, and never in the first few seconds of a run. More of
+       them come out after dark. */
+    float rate = 0.004f * (1.0f + Boldness() * 2.2f);
+
+    if (sElapsed > GRACE && alive < STALKER_MAX && Rand01() < rate)
     {
         TrySpawn(catPos.x);
     }

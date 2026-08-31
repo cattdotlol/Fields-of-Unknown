@@ -613,3 +613,35 @@ void TerrainDrawWater(float left, float right)
     DrawRectangle((int)left, (int)(y + 2.0f), (int)w, 900,
                   (Color){ 14, 40, 48, 165 });
 }
+
+/* --- shelter ------------------------------------------------------------
+   Five upward probes, because one ray through a gap between two slabs
+   reads as open sky and makes the light flicker. */
+
+#define COVER_RAYS   5
+#define COVER_REACH  320.0f
+
+float TerrainCoverAbove(Vector2 p)
+{
+    float covered = 0.0f;
+
+    for (int i = 0; i < COVER_RAYS; i++)
+    {
+        float t = (float)i / (float)(COVER_RAYS - 1);
+        float ox = (t - 0.5f) * 52.0f;
+
+        for (float h = 24.0f; h <= COVER_REACH; h += 42.0f)
+        {
+            Rectangle probe = { p.x + ox - 3.0f, p.y - h, 6.0f, 10.0f };
+
+            if (TerrainOverlaps(probe))
+            {
+                /* A low roof encloses you more than a distant one. */
+                covered += 1.0f - (h / COVER_REACH) * 0.45f;
+                break;
+            }
+        }
+    }
+
+    return covered / (float)COVER_RAYS;
+}

@@ -1,6 +1,7 @@
 #include "entity/vitals.h"
 #include "entity/cat.h"
 #include "world/season.h"
+#include "world/daylight.h"
 #include "world/ocean.h"
 #include "world/terrain.h"
 #include "world/weather.h"
@@ -18,6 +19,13 @@ Vitals gVitals;
 
 #define WARMTH_BASE     0.0025f
 #define WARMTH_REGEN    0.0060f
+/* Tuned by simulating a full night in each season, exposed and under a
+   roof. A summer night out is uncomfortable, an autumn one nearly kills,
+   and a winter one does - unless the cat found somewhere to be. */
+#define NIGHT_CHILL      0.0022f  /* heat lost per second under open sky */
+#define NIGHT_COLD_BASE  0.70f
+#define NIGHT_COLD_SLOPE 0.45f
+#define NIGHT_REGEN_CUT  0.85f    /* how much the cold suppresses recovery */
 
 /* Sixteen seconds under, two seconds to get it back. Drowning is meant
    to be faster than starving: it is the one that should panic you. */
@@ -110,9 +118,17 @@ void VitalsUpdate(float dt)
         if (dx * dx + dy * dy < 150.0f * 150.0f) { byVent = true; break; }
     }
 
+    /* Heat goes out of the ground after dark whether the cat is wet or
+       not - but a roof keeps most of it in. Nothing says so; the cat
+       either works out where to spend the night or it does not. */
+    float cover = TerrainCoverAbove(CatPosition());
+    float night = DaylightChill() * (1.0f - cover * 0.82f);
+
     float loss  = wet * (0.006f + cold * 0.010f) * (1.0f + chill * 1.8f);
+    loss += night * NIGHT_CHILL * (NIGHT_COLD_BASE + cold * NIGHT_COLD_SLOPE);
     if (byVent) loss = 0.0f;
-    float regen = (1.0f - wet) * WARMTH_REGEN * SeasonTemperature();
+    float regen = (1.0f - wet) * WARMTH_REGEN * SeasonTemperature()
+                  * (1.0f - night * NIGHT_REGEN_CUT);
     if (byVent) regen = WARMTH_REGEN * 2.2f;      /* vents are warm */
 
     gVitals.warmth = Clamp01(gVitals.warmth + (regen - loss) * dt);

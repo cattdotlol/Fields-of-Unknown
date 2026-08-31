@@ -8,6 +8,7 @@
 #include "gfx/lighting.h"
 #include "gfx/scene_flood.h"
 #include "world/season.h"
+#include "world/daylight.h"
 #include "world/weather.h"
 #include "ui/theme.h"
 #include "ui/cursor.h"
@@ -91,6 +92,7 @@ void AppInit(void)
     FloodSceneInit(WORLD_SEED);
     SeasonInit();
     WeatherInit(WORLD_SEED);
+    DaylightInit();
 
     sScreens[SCREEN_TITLE]    = &ScreenTitle;
     sScreens[SCREEN_INTRO]    = &ScreenIntro;
@@ -118,6 +120,7 @@ void AppRun(void)
         {
             SeasonUpdate(TICK_DT);
             WeatherUpdate(TICK_DT);
+            DaylightUpdate(TICK_DT);
             FloodSceneUpdate(TICK_DT);
 
             if (sFadeDir == 0 && sScreens[sCurrent]->fixedUpdate)

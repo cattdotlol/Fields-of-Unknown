@@ -14,5 +14,6 @@ void SuiteStalker(void);
 void SuitePhysics(void);
 void SuiteDistrict(void);
 void SuiteTree(void);
+void SuiteDaylight(void);
 
 #endif /* TESTS_H */

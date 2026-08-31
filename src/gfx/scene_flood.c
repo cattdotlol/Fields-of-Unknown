@@ -1,6 +1,7 @@
 #include "gfx/scene_flood.h"
 
 #include "world/weather.h"
+#include "world/daylight.h"
 
 #include "raylib.h"
 
@@ -171,6 +172,20 @@ static Color Mul(Color c, float k)
     return (Color){ (unsigned char)((float)c.r * k),
                     (unsigned char)((float)c.g * k),
                     (unsigned char)((float)c.b * k), c.a };
+}
+
+/* Aerial perspective: the further off a thing is, the more of the sky
+   sits between it and you - so distance washes toward the horizon by day
+   and toward nothing at all by night. */
+static Color Toward(Color c, Color sky, float t)
+{
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+
+    return (Color){ (unsigned char)((float)c.r + ((float)sky.r - (float)c.r) * t),
+                    (unsigned char)((float)c.g + ((float)sky.g - (float)c.g) * t),
+                    (unsigned char)((float)c.b + ((float)sky.b - (float)c.b) * t),
+                    c.a };
 }
 
 static float CellSize(void)
@@ -384,45 +399,109 @@ void FloodSceneDraw(float reveal, float rain, float cameraX, bool snow)
     float waterY = FloodSceneWaterY();
     float cell = CellSize();
 
-    /* Sky: violet-black overhead washing to a sick teal at the horizon. */
+    /* Sky: whatever hour it is. The palette stays off-key even at noon -
+       this is not Earth's sky. */
+    Color skyTop, skyBottom;
+    DaylightSky(&skyTop, &skyBottom);
+
     DrawRectangleGradientV(0, 0, w, (int)waterY,
-                           Mul((Color){ 16, 12, 30, 255 }, reveal),
-                           Mul((Color){ 34, 52, 50, 255 }, reveal));
+                           Mul(skyTop, reveal), Mul(skyBottom, reveal));
 
-    /* Stars barely move; they are supposed to be very far away. */
-    float starScroll = cameraX * 0.012f;
-    for (int i = 0; i < STAR_COUNT; i++)
+    /* Stars barely move; they are supposed to be very far away. They also
+       wash out the moment there is any real light in the sky. */
+    float stars = DaylightStarAlpha();
+
+    if (stars > 0.01f)
     {
-        float tw = 0.45f + 0.55f * sinf(sTime * 1.4f + sStars[i].phase);
-        tw = floorf(tw * 4.0f) / 4.0f;
+        float starScroll = cameraX * 0.012f;
 
-        float sx = fmodf(sStars[i].x * fw - starScroll, fw);
-        if (sx < 0.0f) sx += fw;
+        for (int i = 0; i < STAR_COUNT; i++)
+        {
+            float tw = 0.45f + 0.55f * sinf(sTime * 1.4f + sStars[i].phase);
+            tw = floorf(tw * 4.0f) / 4.0f;
 
-        float side = sStars[i].big ? cell * 2.0f : cell;
+            float sx = fmodf(sStars[i].x * fw - starScroll, fw);
+            if (sx < 0.0f) sx += fw;
 
-        DrawRectangle((int)sx, (int)(sStars[i].y * fh), (int)side, (int)side,
-                      Fade(Mul((Color){ 225, 230, 245, 255 }, reveal), tw * 0.7f));
+            float side = sStars[i].big ? cell * 2.0f : cell;
+
+            DrawRectangle((int)sx, (int)(sStars[i].y * fh), (int)side, (int)side,
+                          Fade(Mul((Color){ 225, 230, 245, 255 }, reveal),
+                               tw * 0.7f * stars));
+        }
     }
 
-    DrawPixelDisc(fw * 0.76f - cameraX * 0.02f, fh * 0.20f, fh * 0.155f, cell,
-                  Mul((Color){ 74, 60, 96, 255 }, reveal),
-                  Mul((Color){ 58, 46, 78, 255 }, reveal));
+    /* Sun and moon ride the same arc, half a turn apart. Only whichever is
+       above the horizon gets drawn. */
+    float sunUp = DaylightSunHeight();
 
-    DrawPixelDisc(fw * 0.17f - cameraX * 0.03f, fh * 0.13f, fh * 0.035f, cell,
-                  Mul((Color){ 150, 156, 170, 255 }, reveal),
-                  Mul((Color){ 126, 132, 148, 255 }, reveal));
+    if (sunUp > -0.06f)
+    {
+        float track = DaylightSunTrack();
+        float sx = fw * (0.08f + 0.84f * track) - cameraX * 0.02f;
+        float sy = waterY - sinf(track * PI) * waterY * 0.78f;
 
-    DrawLayer(&LAYER_FAR, 0u, Mul((Color){ 26, 36, 44, 255 }, reveal),
+        /* Low sun reddens, the way it does through more air. */
+        float low = 1.0f - (sunUp > 0.0f ? sunUp : 0.0f);
+        Color core = { (unsigned char)(238.0f),
+                       (unsigned char)(232.0f - 78.0f * low),
+                       (unsigned char)(206.0f - 128.0f * low), 255 };
+
+        DrawPixelDisc(sx, sy, fh * 0.042f, cell,
+                      Mul(core, reveal), Mul(Mul(core, 0.86f), reveal));
+    }
+
+    float moonUp = DaylightMoonHeight();
+
+    if (moonUp > -0.06f)
+    {
+        float track = DaylightMoonTrack();
+        float mx = fw * (0.08f + 0.84f * track) - cameraX * 0.02f;
+        float my = waterY - sinf(track * PI) * waterY * 0.72f;
+        float mr = fh * 0.155f;
+
+        DrawPixelDisc(mx, my, mr, cell,
+                      Mul((Color){ 118, 100, 148, 255 }, reveal),
+                      Mul((Color){  96,  80, 126, 255 }, reveal));
+
+        /* The phase is carved out with the sky itself, so the dark limb is
+           genuinely missing rather than painted over. */
+        float full = DaylightMoonFullness();
+
+        if (full < 0.97f)
+        {
+            /* Offset the carve by a full diameter and it clears the moon
+               entirely; offset it by nothing and the moon is gone. Full
+               moon is the one that needs no carving at all. */
+            float shift = full * 2.0f * mr;
+
+            /* Carve with the sky as it is at the moon's own height, not at
+               the top of the screen, or a low moon gets a bite taken out
+               of it in the wrong colour. */
+            float up = (waterY > 1.0f) ? (my / waterY) : 0.0f;
+            Color behind = Toward(skyTop, skyBottom, up);
+
+            DrawPixelDisc(mx - shift, my, mr, cell,
+                          Mul(behind, reveal), Mul(behind, reveal));
+        }
+    }
+
+    float lit = DaylightBrightness();
+
+    DrawLayer(&LAYER_FAR, 0u,
+              Mul(Toward((Color){ 26, 36, 44, 255 }, skyBottom, lit * 0.46f), reveal),
               cameraX, waterY, reveal, false);
 
-    DrawLayer(&LAYER_NEAR, 1u, Mul((Color){ 8, 12, 18, 255 }, reveal),
+    DrawLayer(&LAYER_NEAR, 1u,
+              Mul(Toward((Color){ 8, 12, 18, 255 }, skyBottom, lit * 0.13f), reveal),
               cameraX, waterY, reveal, false);
 
     DrawPod(reveal, fw, waterY, cell, cameraX);
 
+    /* The water is mostly reflected sky, so it goes where the sky goes. */
     DrawRectangle(0, (int)waterY, w, h - (int)waterY,
-                  Mul((Color){ 12, 24, 28, 255 }, reveal));
+                  Mul(Toward((Color){ 12, 24, 28, 255 }, skyBottom, lit * 0.40f),
+                      reveal));
 
     /* Reflections go on after the water, so they sit in it. */
     DrawLayer(&LAYER_NEAR, 1u, BLANK, cameraX, waterY, reveal, true);

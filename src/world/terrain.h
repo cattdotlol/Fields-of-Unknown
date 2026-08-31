@@ -36,4 +36,9 @@ int  TerrainEatAt(Rectangle box);
 void TerrainDraw(float left, float right, Rectangle focus);
 void TerrainDrawWater(float left, float right);
 
+/* How much solid roof sits over a point, 0 open sky to 1 fully enclosed.
+   Shelter is read off this: it decides how much light reaches the cat and
+   how much of the night's cold does. */
+float TerrainCoverAbove(Vector2 p);
+
 #endif /* WORLD_TERRAIN_H */

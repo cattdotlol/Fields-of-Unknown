@@ -6,6 +6,8 @@
 #include "gfx/scene_flood.h"
 #include "ui/theme.h"
 
+#include "world/daylight.h"
+
 #include "raylib.h"
 
 #include <math.h>
@@ -57,6 +59,10 @@ static void Init(void)
 {
     sTime = 0.0f;
     FloodSceneInit(WORLD_SEED);
+
+    /* The cat comes down at first light, however long the player sat on
+       the title screen watching the sky move. */
+    DaylightInit();
 
     for (int i = 0; i < SPACE_STARS; i++)
     {
