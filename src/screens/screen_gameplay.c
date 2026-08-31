@@ -4,6 +4,7 @@
 #include "core/settings.h"
 #include "core/input.h"
 #include "entity/cat.h"
+#include "entity/rat.h"
 #include "entity/vitals.h"
 #include "gfx/filmfx.h"
 #include "gfx/scene_flood.h"
@@ -33,6 +34,7 @@ static void Init(void)
     TerrainStream(CatPosition().x);
     VitalsReset();
     MushroomClearHarvests();
+    RatsReset();
 
     sCam.target = CatPosition();
     sCam.rotation = 0.0f;
@@ -66,17 +68,29 @@ static void FixedUpdate(float dt)
 
     VitalsUpdate(dt);
     MushroomTick(dt);
+    RatsFixedUpdate(dt);
 
     /* Eating is the only way hunger goes back up. What a species does is
        not written down anywhere - you find out by trying it. */
     if (InputPressed(ACT_EAT))
     {
-        int species = TerrainEatAt(CatBounds());
+        /* A rat is worth far more than a mushroom, so it wins the reach. */
+        int rat = RatCatchable(CatBounds());
 
-        if (species >= 0)
+        if (rat >= 0)
         {
-            MushroomEffect e = MushroomEffectOf((unsigned char)species);
-            VitalsApply(e.hunger, e.health, e.warmth);
+            RatConsume(rat);
+            VitalsApply(0.45f, 0.05f, 0.10f);
+        }
+        else
+        {
+            int species = TerrainEatAt(CatBounds());
+
+            if (species >= 0)
+            {
+                MushroomEffect e = MushroomEffectOf((unsigned char)species);
+                VitalsApply(e.hunger, e.health, e.warmth);
+            }
         }
     }
 
@@ -88,6 +102,7 @@ static void FixedUpdate(float dt)
         TerrainStream(CatPosition().x);
         VitalsReset();
         MushroomClearHarvests();
+        RatsReset();
     }
 }
 
@@ -107,6 +122,7 @@ static void Update(float dt)
         TerrainStream(CatPosition().x);
         VitalsReset();
         MushroomClearHarvests();
+        RatsReset();
         sCam.target = CatPosition();
     }
     if (InputPressed(ACT_CANCEL)) AppGoTo(SCREEN_TITLE);
@@ -145,6 +161,7 @@ static void DrawDebug(void)
         TextFormat("WIND     %+.2f", (double)WeatherWind()),
         TextFormat("STATE    %s", StateName(CatCurrentState())),
         TextFormat("NOISE    %.2f", (double)CatNoise()),
+        TextFormat("RATS     %d  (%d fleeing)", RatCount(), RatAlarmed()),
         TextFormat("SCENT M. %.2f", (double)WeatherScentMask()),
         TextFormat("SEASON   %s %.0f%%  temp %.2f", SeasonName(),
                    (double)(SeasonProgress() * 100.0f), (double)SeasonTemperature()),
@@ -180,6 +197,7 @@ static void Draw(void)
 
     BeginMode2D(sCam);
         TerrainDraw(topLeft.x, botRight.x, CatBounds());
+        RatsDraw(AppRenderAlpha(), topLeft.x, botRight.x);
         CatDraw(AppRenderAlpha());
 
         /* Water last, so anything under it is tinted by it. */

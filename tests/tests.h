@@ -9,5 +9,6 @@ void SuiteWorldgen(void);
 void SuiteVitals(void);
 void SuiteMushroom(void);
 void SuiteInput(void);
+void SuiteRat(void);
 
 #endif /* TESTS_H */

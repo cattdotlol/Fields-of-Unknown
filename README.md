@@ -8,8 +8,8 @@ are hungry, or what the thing across the water is. You find out.
 
 Written in C11 against [raylib](https://www.raylib.com/) 5.5.
 
-> Early days — the world, weather and movement are in. Survival and
-> anything that hunts you are not yet.
+> Early days — the world, weather, movement and food are in. Nothing
+> hunts the cat back yet.
 
 ---
 
@@ -116,6 +116,11 @@ four later depending on how far off it was.
 **Weather is a difficulty dial, not scenery.** Rain masks the cat's scent
 and noise, but it also raises the water, which drowns the ground route and
 forces you up onto the ledges. Standing water fills faster than it drains.
+
+**How you move decides whether you eat.** Rats hear rather than see. A
+sprint carries across the whole street and clears it; a crouched approach
+is almost silent. `CatNoise()` is state times weather, so a storm covers
+you and a dry night does not.
 
 **Nothing is explained in text.** No meters, no tooltips. The cat's
 condition should be readable off the cat.
