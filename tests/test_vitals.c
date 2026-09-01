@@ -100,6 +100,31 @@ static void TestStarvingKills(void)
     Check("but not instantly", t > 20.0f, true);
 }
 
+/* The screen fades the world out over more than a second before it puts
+   the cat back, and it only gets that long because nothing clears the
+   flag on its own. Reviving is VitalsReset's job and nothing else's - a
+   regen path that quietly un-kills the cat would skip the whole death. */
+static void TestDeathSticks(void)
+{
+    SeasonInit();
+    WeatherInit(1u);
+    VitalsReset();
+
+    gVitals.hunger = 0.0f;
+    SecondsUntil(Dead, 600.0f);
+
+    Check("starving gets there", gVitals.dead, true);
+
+    for (int i = 0; i < 60 * 5; i++) VitalsUpdate(TICK);
+
+    Check("five seconds later it is still dead", gVitals.dead, true);
+    Check("and health has not crept back up", gVitals.health <= 0.0f, true);
+
+    VitalsReset();
+
+    Check("only a reset brings the cat back", gVitals.dead, false);
+}
+
 static void TestFedAndWarmRecovers(void)
 {
     SeasonInit();
@@ -429,6 +454,7 @@ void SuiteVitals(void)
     TestHungerIsTheClock();
     TestMildWeatherIsSurvivable();
     TestStarvingKills();
+    TestDeathSticks();
     TestFedAndWarmRecovers();
     TestEverythingStaysInRange();
     TestStamina();

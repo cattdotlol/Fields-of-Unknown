@@ -99,6 +99,14 @@ static void Init(void)
     WorldSetSeed(WORLD_SEED);
     RestartRun();
 
+    /* Not in RestartRun: the death path calls that mid-fade and needs the
+       screen to stay black across it. Entering the screen is the only
+       moment these are genuinely stale - leaving during a death fade
+       used to come back to a half-black world that never cleared. */
+    sDeath = 0.0f;
+    sReviving = false;
+    sHurt = 0.0f;
+
     sCam.rotation = 0.0f;
     sDebug = false;
 }
@@ -260,10 +268,6 @@ static void FixedUpdate(float dt)
             }
         }
     }
-
-    /* Placeholder: back to the crash site. Dying should eventually cost
-       something the player can feel. */
-    if (gVitals.dead) RestartRun();
 }
 
 static void Update(float dt)
