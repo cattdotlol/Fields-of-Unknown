@@ -15,5 +15,7 @@ void SuitePhysics(void);
 void SuiteDistrict(void);
 void SuiteTree(void);
 void SuiteDaylight(void);
+void SuiteOcean(void);
+void SuiteAquatic(void);
 
 #endif /* TESTS_H */

@@ -1,14 +1,54 @@
 #include "entity/aquatic.h"
 #include "entity/cat.h"
 #include "entity/vitals.h"
+#include "world/daylight.h"
+#include "world/ocean.h"
 #include "world/terrain.h"
 #include "world/weather.h"
 
 #include <math.h>
 
-/* How far below the surface things live. Nothing swims in the air. */
-#define BAND_TOP     26.0f
-#define BAND_BOTTOM 360.0f
+/* The drowned city is a lid on the sea, and this is where it ends.
+
+   Measured across four thousand units of map: above 240 down, better
+   than nine tenths of the water is solid even to something jellyfish
+   sized, and it does not open out properly until about 300. Only the
+   channels get through, and only a cat fits those. That one fact
+   decides the whole shape of what lives here - nothing out there is
+   ever seen from the surface, and the danger is in diving rather than
+   in swimming. */
+#define SEA_TOP     300.0f
+
+/* Clearance kept above the rock. The floor runs from 431 down to 2199,
+   so without this a whale over the shelf would spend its life grinding
+   along the bottom. */
+#define FLOOR_CLEAR  70.0f
+
+/* Where each kind lives, as depth below the surface, and how much of the
+   daily migration it takes part in.
+
+   The scattering layer rises after dark and sinks again at first light -
+   the largest daily movement of animals anywhere. Jellyfish ride it
+   hardest, sharks follow what it carries, and a whale ignores it
+   entirely: it dives on its own clock, because it has to come back up
+   to breathe. */
+typedef struct Band {
+    float shallow;
+    float deep;
+    float migrate;   /* 0 stays put, 1 follows the light the whole way */
+    float homeLo;    /* where in the band an individual settles */
+    float homeHi;
+} Band;
+
+static const Band BANDS[AQUA_KIND_COUNT] = {
+    [AQUA_JELLY] = { SEA_TOP,         900.0f, 0.85f, 0.25f, 0.75f },
+    [AQUA_SHARK] = { SEA_TOP,         620.0f, 0.55f, 0.25f, 0.75f },
+    /* A whale sits at the bottom of its own range rather than the middle
+       of it, and needs more room under the city than the others. Its
+       floor is past the cat's crush depth, so following one all the way
+       down is not an option. */
+    [AQUA_WHALE] = { SEA_TOP + 40.0f, 1800.0f, 0.00f, 0.75f, 1.00f },
+};
 
 #define JELLY_MAX  8
 #define SHARK_MAX  2
@@ -18,6 +58,11 @@
 #define SHARK_CRUISE  70.0f
 #define SHARK_CHARGE 205.0f      /* the cat swims at 74 */
 #define WHALE_SPEED   34.0f
+
+/* Long enough down that coming back up reads as an event, and long
+   enough up that it can actually climb the whole column first. */
+#define WHALE_SOUND  150.0f
+#define WHALE_RISE    60.0f
 
 #define SHARK_SENSE   540.0f
 #define SHARK_BITE     46.0f
@@ -38,6 +83,8 @@ typedef struct Aquatic {
     float   timer;
     float   cooldown;
     float   interest;    /* sharks only                     */
+    float   home;        /* 0 top of its band, 1 the bottom */
+    bool    rising;      /* whales only: on the way up      */
     bool    active;
 } Aquatic;
 
@@ -85,12 +132,52 @@ Vector2     AquaticPosition(int i) { return AquaticActive(i) ? sLife[i].pos : (V
 bool        AquaticHunting(int i)  { return AquaticActive(i) && sLife[i].kind == AQUA_SHARK &&
                                             sLife[i].interest > 0.5f; }
 
+static float SizeOf(AquaticKind kind)
+{
+    return (kind == AQUA_WHALE) ? 120.0f
+         : (kind == AQUA_SHARK) ?  34.0f
+                                :  14.0f;
+}
+
+/* Deep by day, shallow by night, measured from wherever in its own band
+   this individual sits. Kept free of the struct so spawning can ask the
+   same question before there is anything to ask it about. */
+static float DepthFor(AquaticKind kind, float home, float worldX)
+{
+    const Band *b = &BANDS[kind];
+
+    float t = home + b->migrate * (DaylightBrightness() - 0.5f);
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+
+    float want = b->shallow + (b->deep - b->shallow) * t;
+
+    /* Its own size counts against the clearance, or a whale aims at a
+       depth its body does not fit in and fails to spawn at all. */
+    float bed = OceanFloorAt(worldX) - WeatherWaterY()
+              - FLOOR_CLEAR - SizeOf(kind);
+    if (want > bed) want = bed;
+    if (want < b->shallow) want = b->shallow;
+
+    return want;
+}
+
 static float AquaticGlowOf(const Aquatic *a)
 {
     if (a->kind != AQUA_JELLY) return 0.0f;
 
     /* A slow pulse, out of step between individuals. */
-    return 0.55f + 0.45f * sinf(a->phase * 1.6f);
+    float pulse = 0.55f + 0.45f * sinf(a->phase * 1.6f);
+
+    /* Bioluminescence is only worth anything where there is no daylight
+       left to drown it out: what reaches this one is the sky's own
+       brightness, minus everything the water above took out of it. So a
+       jellyfish at the surface at noon barely shows, and the same
+       jellyfish at midnight - or four hundred down at any hour - is the
+       only light there is. */
+    float reaching = OceanLight(OceanDepthAt(a->pos.y)) * DaylightBrightness();
+
+    return pulse * (0.15f + 0.85f * (1.0f - reaching));
 }
 
 float AquaticGlow(int i)
@@ -105,14 +192,14 @@ float AquaticGlow(int i)
 /* Open water: under the surface and not inside anything. */
 static bool OpenWaterAt(Vector2 p, float size)
 {
-    if (p.y < WeatherWaterY() + BAND_TOP) return false;
+    if (p.y < WeatherWaterY() + SEA_TOP) return false;
 
     Rectangle box = { p.x - size, p.y - size, size * 2.0f, size * 2.0f };
 
     return !TerrainOverlaps(box);
 }
 
-static bool Place(AquaticKind kind, float x, float y, float size)
+static bool Place(AquaticKind kind, float x, float y, float size, float home)
 {
     for (int i = 0; i < AQUATIC_MAX; i++)
     {
@@ -127,6 +214,8 @@ static bool Place(AquaticKind kind, float x, float y, float size)
         sLife[i].timer = RandRange(2.0f, 6.0f);
         sLife[i].cooldown = 0.0f;
         sLife[i].interest = 0.0f;
+        sLife[i].home = home;
+        sLife[i].rising = false;
         sLife[i].active = true;
         return true;
     }
@@ -136,38 +225,46 @@ static bool Place(AquaticKind kind, float x, float y, float size)
 
 static void TrySpawn(AquaticKind kind, float centreX)
 {
-    float size = (kind == AQUA_WHALE) ? 120.0f
-               : (kind == AQUA_SHARK) ? 34.0f : 14.0f;
+    float size = SizeOf(kind);
 
     for (int attempt = 0; attempt < 10; attempt++)
     {
         float side = (Rand01() < 0.5f) ? -1.0f : 1.0f;
         float x = centreX + side * RandRange(SPAWN_CLEAR, SPAWN_NEAR);
 
-        /* Whales want depth; jellyfish are happy near the top. */
-        float depth = (kind == AQUA_WHALE) ? RandRange(180.0f, BAND_BOTTOM)
-                                           : RandRange(BAND_TOP + 20.0f, BAND_BOTTOM * 0.7f);
-
-        Vector2 p = { x, WeatherWaterY() + depth };
+        /* Spawn where this kind would already be at this hour, not at a
+           uniform depth it would then have to swim away from. */
+        float home = RandRange(BANDS[kind].homeLo, BANDS[kind].homeHi);
+        Vector2 p = { x, WeatherWaterY() + DepthFor(kind, home, x) };
 
         if (!OpenWaterAt(p, size)) continue;
 
-        Place(kind, p.x, p.y, size);
+        Place(kind, p.x, p.y, size, home);
         return;
     }
 }
 
 void AquaticForceSpawn(AquaticKind kind, float x)
 {
-    float size = (kind == AQUA_WHALE) ? 120.0f
-               : (kind == AQUA_SHARK) ? 34.0f : 14.0f;
+    float size = SizeOf(kind);
 
-    float depth = (kind == AQUA_WHALE) ? 220.0f : 80.0f;
-
-    Place(kind, x, WeatherWaterY() + depth, size);
+    Place(kind, x, WeatherWaterY() + DepthFor(kind, 0.5f, x), size, 0.5f);
 }
 
 /* --- behaviour --------------------------------------------------------- */
+
+/* Ease toward the depth this one wants to be at, capped so nothing
+   rockets vertically. Returns a velocity, to be added to whatever the
+   animal was doing anyway. */
+static float DepthDrive(const Aquatic *a, float want, float most)
+{
+    float v = (want - OceanDepthAt(a->pos.y)) * 0.30f;
+
+    if (v >  most) v =  most;
+    if (v < -most) v = -most;
+
+    return v;
+}
 
 static void Swim(Aquatic *a, Vector2 wanted, float accel, float dt)
 {
@@ -176,24 +273,44 @@ static void Swim(Aquatic *a, Vector2 wanted, float accel, float dt)
 
     Vector2 next = { a->pos.x + a->vel.x * dt, a->pos.y + a->vel.y * dt };
 
-    /* Turn at the surface and at anything solid, rather than beaching. */
-    float top = WeatherWaterY() + BAND_TOP;
+    /* Turn at the roof of the sea and at anything solid, rather than
+       beaching. Each kind has its own roof: what a jellyfish can slip
+       under a whale cannot. */
+    float top = WeatherWaterY() + BANDS[a->kind].shallow;
 
     if (next.y < top) { next.y = top; a->vel.y = fabsf(a->vel.y) * 0.4f; }
-    if (next.y > WeatherWaterY() + BAND_BOTTOM) a->vel.y = -fabsf(a->vel.y);
 
-    Rectangle probe = { next.x - a->size * 0.6f, next.y - a->size * 0.4f,
-                        a->size * 1.2f, a->size * 0.8f };
+    /* Its own band is the limit, not one shared ceiling for everything. */
+    if (next.y > WeatherWaterY() + BANDS[a->kind].deep + 150.0f)
+    {
+        a->vel.y = -fabsf(a->vel.y);
+    }
 
-    if (TerrainOverlaps(probe))
+    float halfW = a->size * 0.6f;
+    float halfH = a->size * 0.4f;
+
+    /* Each axis on its own, so an obstruction turns it instead of
+       pinning it. Testing only the corner it wanted meant a whale
+       climbing into the underside of the city stopped dead and stayed
+       there for the rest of its rise, going nowhere in either
+       direction. */
+    Rectangle acrossOnly = { next.x - halfW, a->pos.y - halfH,
+                             halfW * 2.0f, halfH * 2.0f };
+    Rectangle upOnly     = { a->pos.x - halfW, next.y - halfH,
+                             halfW * 2.0f, halfH * 2.0f };
+
+    bool blockedAcross = TerrainOverlaps(acrossOnly);
+    bool blockedUp     = TerrainOverlaps(upOnly);
+
+    if (!blockedAcross) a->pos.x = next.x;
+    else
     {
         a->vel.x = -a->vel.x * 0.6f;
         a->facing = -a->facing;
     }
-    else
-    {
-        a->pos = next;
-    }
+
+    if (!blockedUp) a->pos.y = next.y;
+    else a->vel.y = -a->vel.y * 0.4f;
 
     if (fabsf(a->vel.x) > 4.0f) a->facing = (a->vel.x > 0.0f) ? 1.0f : -1.0f;
 
@@ -238,8 +355,14 @@ static void UpdateOne(Aquatic *a, float dt, Vector2 cat, bool catSwimming)
                     a->timer = RandRange(3.0f, 8.0f);
                 }
 
+                /* Only when it is not chasing: a shark that has the cat
+                   in sight goes where the cat is, not where the day
+                   says it should be. */
+                float drift = DepthDrive(a, DepthFor(a->kind, a->home, a->pos.x),
+                                         SHARK_CRUISE * 0.35f);
+
                 wanted = (Vector2){ a->facing * SHARK_CRUISE,
-                                    sinf(a->phase * 0.6f) * 18.0f };
+                                    drift + sinf(a->phase * 0.6f) * 18.0f };
             }
 
             Swim(a, wanted, 3.0f, dt);
@@ -255,8 +378,27 @@ static void UpdateOne(Aquatic *a, float dt, Vector2 cat, bool catSwimming)
 
         case AQUA_WHALE:
         {
-            /* Straight on, slowly, indifferent to everything. */
-            Vector2 wanted = { a->facing * WHALE_SPEED, sinf(a->phase * 0.25f) * 8.0f };
+            /* Straight on, slowly, indifferent to the cat. It works the
+               whole column: down to the plain to feed, then all the way
+               back up until the drowned city stops it. Nothing else has
+               a reason to cross every zone, and below the shelf it is
+               the only thing that goes deeper than the cat can follow. */
+            a->timer -= dt;
+
+            if (a->timer <= 0.0f)
+            {
+                a->rising = !a->rising;
+                a->timer = a->rising
+                         ? WHALE_RISE
+                         : RandRange(WHALE_SOUND * 0.7f, WHALE_SOUND * 1.3f);
+            }
+
+            float want = a->rising ? BANDS[AQUA_WHALE].shallow
+                                   : DepthFor(a->kind, a->home, a->pos.x);
+
+            Vector2 wanted = { a->facing * WHALE_SPEED,
+                               DepthDrive(a, want, WHALE_SPEED * 2.0f)
+                                   + sinf(a->phase * 0.25f) * 8.0f };
             Swim(a, wanted, 0.6f, dt);
             break;
         }
@@ -268,8 +410,16 @@ static void UpdateOne(Aquatic *a, float dt, Vector2 cat, bool catSwimming)
                straight through one, which is what makes the light worth
                swimming towards. */
             float pulse = sinf(a->phase * 1.6f);
+
+            /* The pulse and the sink stay exactly as they were - the
+               migration is a bias underneath them, not a replacement.
+               Up close a jellyfish still bobs; it is only over an hour
+               that you notice the whole layer has moved. */
+            float drift = DepthDrive(a, DepthFor(a->kind, a->home, a->pos.x),
+                                     JELLY_SPEED * 0.5f);
+
             Vector2 wanted = { a->facing * JELLY_SPEED * 0.4f,
-                               (pulse > 0.6f) ? -JELLY_SPEED : 12.0f };
+                               drift + ((pulse > 0.6f) ? -JELLY_SPEED : 12.0f) };
 
             Swim(a, wanted, 1.6f, dt);
 
@@ -301,7 +451,7 @@ void AquaticFixedUpdate(float dt)
         }
 
         /* The flood can drop away underneath them. */
-        if (sLife[i].pos.y < WeatherWaterY() + BAND_TOP * 0.5f)
+        if (sLife[i].pos.y < WeatherWaterY() + SEA_TOP * 0.5f)
         {
             sLife[i].active = false;
             continue;

@@ -46,4 +46,11 @@ float OceanPressure(float depth);
    ground surface uses. */
 float OceanFloorHeight(int boundaryIndex);
 
+/* The floor under an arbitrary world x, interpolated between the two
+   boundaries either side of it: the same line BuildOcean steps its slabs
+   along, without the per-slab jitter. Accurate enough to steer by, which
+   is what it is for - anything that swims aims to clear this, and the
+   collision boxes are what it actually bumps into. */
+float OceanFloorAt(float worldX);
+
 #endif /* WORLD_OCEAN_H */

@@ -1,5 +1,6 @@
 #include "world/ocean.h"
 #include "world/weather.h"
+#include "world/worldgen.h"
 
 #include <math.h>
 
@@ -120,4 +121,18 @@ float OceanFloorHeight(int boundaryIndex)
     float shaped = t * t * (3.0f - 2.0f * t);
 
     return 900.0f + shaped * 2000.0f;
+}
+
+float OceanFloorAt(float worldX)
+{
+    float where = worldX / CHUNK_WIDTH;
+    int   index = (int)floorf(where);
+    float t = where - (float)index;
+
+    float a = OceanFloorHeight(index);
+    float b = OceanFloorHeight(index + 1);
+
+    /* No clamp needed: OceanFloorHeight bottoms out at SEA_CEILING
+       already, so a blend of two of them cannot come up above it. */
+    return a + (b - a) * t;
 }

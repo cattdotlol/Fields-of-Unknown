@@ -7,12 +7,22 @@
 
 /* What lives in the flood.
 
-   Land has the stalker; water gets its own reasons to be careful. A shark
-   swims faster than the cat can, so once one has noticed you the answer
-   is to get out, not to outswim it - which is what makes breath and
-   diving matter. Jellyfish are harmless: they drift, they glow, and
-   below the surface they are the only light there is.
-   Whales are neither: they are just enormous and pass by. */
+   The drowned city is a lid on the sea. Nothing out here lives above
+   about three hundred down, because above that the water is more solid
+   than not - only the channels get through, and only a cat fits them.
+   So none of this is ever seen from the surface: it is all found by
+   diving, which is what makes breath matter.
+
+   Below that lid the whole layer moves with the sun. It rises after
+   dark and sinks again at first light, the way the real one does, so
+   the same dive is a different sea at midnight than it is at noon.
+
+   Land has the stalker; water gets its own reasons to be careful. A
+   shark swims faster than the cat can, so once one has noticed you the
+   answer is to get out, not to outswim it. Jellyfish are harmless: they
+   drift, they glow, and down there they are the only light. The whale
+   is neither - it works the whole column, and it goes deeper than the
+   cat can follow. */
 
 #define AQUATIC_MAX 14
 
