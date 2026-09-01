@@ -1,11 +1,12 @@
 #include "entity/stalker.h"
 
-#include "world/daylight.h"
+#include "core/rng.h"
 #include "entity/cat.h"
 #include "entity/vitals.h"
+#include "gfx/sprite.h"
+#include "world/daylight.h"
 #include "world/physics.h"
 #include "world/terrain.h"
-#include "world/weather.h"
 
 #include <math.h>
 
@@ -55,28 +56,24 @@ typedef struct Stalker {
     bool         active;
 } Stalker;
 
+#define STALKER_SEED 0xBADCA7u
+
 static Stalker sPack[STALKER_MAX];
-static unsigned int sRng = 0xBADCA7u;
 static float sElapsed;
 static bool  sRoarPending;
 static float sRoarLoud;
 
-static float Rand01(void)
-{
-    sRng = sRng * 1664525u + 1013904223u;
-    return (float)((sRng >> 8) & 0xFFFFu) / 65535.0f;
-}
+/* Its own stream. See core/rng.h. */
+static Rng sRng;
 
-static float RandRange(float lo, float hi)
-{
-    return lo + Rand01() * (hi - lo);
-}
+static float Rand01(void)                  { return Rng01(&sRng); }
+static float RandRange(float lo, float hi) { return RngBetween(&sRng, lo, hi); }
 
 void StalkersReset(void)
 {
     for (int i = 0; i < STALKER_MAX; i++) sPack[i].active = false;
 
-    sRng = 0xBADCA7u;
+    RngSeed(&sRng, STALKER_SEED);
     sElapsed = 0.0f;
     sRoarPending = false;
     sRoarLoud = 0.0f;
@@ -151,24 +148,8 @@ float StalkerNearestDistance(void)
 
 /* --- spawning ---------------------------------------------------------- */
 
-static float DryGroundAt(float x)
-{
-    float best = -1.0f;
-    float water = WeatherWaterY();
-
-    for (int i = 0; i < TerrainCount(); i++)
-    {
-        Rectangle r = TerrainSolid(i);
-
-        if (r.height < 40.0f) continue;
-        if (x < r.x + 24.0f || x > r.x + r.width - 24.0f) continue;
-        if (r.y >= water) continue;
-
-        if (best < 0.0f || r.y < best) best = r.y;
-    }
-
-    return best;
-}
+/* Wide enough that it needs a real slab under it, not the lip of one. */
+#define FOOTING 24.0f
 
 static void TrySpawn(float catX)
 {
@@ -177,7 +158,7 @@ static void TrySpawn(float catX)
         float side = (Rand01() < 0.5f) ? -1.0f : 1.0f;
         float x = catX + side * RandRange(SPAWN_MIN, SPAWN_MAX);
 
-        float ground = DryGroundAt(x);
+        float ground = TerrainDryGroundAt(x, FOOTING);
         if (ground < 0.0f) continue;
 
         for (int i = 0; i < STALKER_MAX; i++)
@@ -210,24 +191,9 @@ void StalkersForceSpawn(float x)
 
 /* --- behaviour --------------------------------------------------------- */
 
-static bool GroundAhead(const Stalker *s)
-{
-    float probeX = s->body.pos.x + s->facing * (BODY_W * 0.6f + 8.0f);
-    Rectangle foot = { probeX - 4.0f, s->body.pos.y + 2.0f, 8.0f, 14.0f };
-
-    return TerrainOverlaps(foot);
-}
-
-static void Steer(Stalker *s, float wanted, float accel, float dt)
-{
-    float diff = wanted - s->body.vel.x;
-    float step = accel * dt;
-
-    if (diff >  step) diff =  step;
-    if (diff < -step) diff = -step;
-
-    s->body.vel.x += diff;
-}
+/* It looks further ahead than a rat does - part of why it never walks
+   into the water by mistake. */
+#define LOOK_DOWN 8.0f
 
 /* It owns the dark. In daylight it keeps its distance and gives up
    quickly; after sundown it hears further and stays interested far
@@ -381,13 +347,13 @@ static void UpdateOne(Stalker *s, float dt, Vector2 catPos, float catNoise)
     }
 
     /* It will not swim. Water is an escape route, and that is the point. */
-    if (wanted != 0.0f && s->body.grounded && !GroundAhead(s))
+    if (wanted != 0.0f && s->body.grounded && !BodyGroundAhead(&s->body, s->facing, LOOK_DOWN, 14.0f))
     {
         s->facing = -s->facing;
         wanted = 0.0f;
     }
 
-    Steer(s, wanted, accel, dt);
+    BodySteerX(&s->body, wanted, accel, dt);
 
     BodyApplyGravity(&s->body, GRAVITY, MAX_FALL, dt);
     BodyMove(&s->body, dt);
@@ -427,15 +393,15 @@ void StalkersFixedUpdate(float dt)
 }
 
 /* --- drawing -----------------------------------------------------------
-   Authored facing LEFT, like everything else. The eyes are drawn last
-   and glow, so in the dark you see those before you see the shape - the
-   way it was introduced. */
+   Authored facing LEFT, like everything else. The eyes are drawn in a
+   second pass and glow, so in the dark you see those before you see the
+   shape - the way it was introduced. */
 
 #define SPR_W 30
 #define SPR_H 18
 #define SPR_PIXEL 1.5f
 
-static const char *SPRITE[SPR_H] = {
+static const char *const SPRITE[SPR_H] = {
     "..KK.....KK...................",
     ".KLLK...KLLK..................",
     ".KLLLLLLLLLK..................",
@@ -456,69 +422,73 @@ static const char *SPRITE[SPR_H] = {
     ".....KKK...........KKK........",
 };
 
+static const Sprite STALKER_ART = { SPRITE, SPR_W, SPR_H, -1.0f };
+
+/* The eyes are deliberately absent from this: the body pass leaves holes
+   where they go, and the glow pass fills them at whatever brightness its
+   interest has reached. */
+static Color StalkerColor(char cell, const void *ctx)
+{
+    (void)ctx;
+
+    switch (cell)
+    {
+        case 'K': return (Color){ 12, 11, 15, 255 };   /* outline */
+        case 'D': return (Color){ 20, 18, 23, 255 };   /* dark    */
+        case 'L': return (Color){ 58, 53, 62, 255 };   /* lit     */
+        case 'T': return (Color){ 24, 22, 28, 255 };   /* tail    */
+        case 'F': return (Color){ 34, 31, 39, 255 };   /* body    */
+        default:  return BLANK;
+    }
+}
+
+#define EYES_MAX 4
+
+static void DrawEyes(const Stalker *s, Vector2 at)
+{
+    Vector2 eyes[EYES_MAX];
+    int found = SpriteCells(STALKER_ART, at, SPR_PIXEL, s->facing,
+                            'E', eyes, EYES_MAX);
+    if (found > EYES_MAX) found = EYES_MAX;
+
+    /* Brighter the more interested it is, with a soft bloom around each
+       so they carry at a distance. */
+    float heat = 0.35f + s->interest * 0.65f;
+    Color glow = (Color){ 226, 132, 48, 255 };
+
+    float p = SPR_PIXEL;
+
+    for (int i = 0; i < found; i++)
+    {
+        DrawRectangleRec((Rectangle){ eyes[i].x - p, eyes[i].y - p,
+                                      p * 3.0f, p * 3.0f },
+                         Fade(glow, 0.16f * heat));
+
+        DrawRectangleRec((Rectangle){ eyes[i].x, eyes[i].y, p, p * 2.0f },
+                         Fade(glow, heat));
+    }
+}
+
 void StalkersDraw(float alpha, float left, float right)
 {
-    Color outline = (Color){ 12, 11, 15, 255 };
-    Color dark    = (Color){ 20, 18, 23, 255 };
-    Color body    = (Color){ 34, 31, 39, 255 };
-    Color lit     = (Color){ 58, 53, 62, 255 };
-    Color tail    = (Color){ 24, 22, 28, 255 };
+    /* Enough to cover the sprite and the bloom that spills past it. */
+    float margin = SpriteHalfWidth(STALKER_ART, SPR_PIXEL) + 40.0f;
 
     for (int i = 0; i < STALKER_MAX; i++)
     {
         if (!sPack[i].active) continue;
 
         Vector2 at = BodyRenderPos(&sPack[i].body, alpha);
-        if (at.x < left - 120.0f || at.x > right + 120.0f) continue;
-
-        float p = SPR_PIXEL;
-        float originX = at.x - (float)SPR_W * p * 0.5f;
-        float originY = at.y - (float)SPR_H * p;
+        if (at.x < left - margin || at.x > right + margin) continue;
 
         /* Hunting raises the head and lengthens the stride. */
-        bool hunting = (sPack[i].state == STALK_HUNT || sPack[i].state == STALK_STRIKE);
-        float crouch = hunting ? -p : 0.0f;
+        bool hunting = (sPack[i].state == STALK_HUNT ||
+                        sPack[i].state == STALK_STRIKE);
+        if (hunting) at.y -= SPR_PIXEL;
 
-        for (int row = 0; row < SPR_H; row++)
-        {
-            for (int col = 0; col < SPR_W; col++)
-            {
-                int read = (sPack[i].facing > 0.0f) ? (SPR_W - 1 - col) : col;
-                char c = SPRITE[row][read];
+        SpriteDrawStanding(STALKER_ART, StalkerColor, NULL, at, SPR_PIXEL,
+                           sPack[i].facing, 1.0f);
 
-                if (c == '.' || c == 'E') continue;
-
-                Color use = body;
-                if (c == 'K') use = outline;
-                else if (c == 'D') use = dark;
-                else if (c == 'L') use = lit;
-                else if (c == 'T') use = tail;
-
-                DrawRectangleRec((Rectangle){ originX + (float)col * p,
-                                              originY + (float)row * p + crouch,
-                                              p, p }, use);
-            }
-        }
-
-        /* Eyes: brighter the more interested it is, with a soft bloom so
-           they carry at distance. */
-        float heat = 0.35f + sPack[i].interest * 0.65f;
-        Color glow = (Color){ 226, 132, 48, 255 };
-
-        for (int row = 0; row < SPR_H; row++)
-        {
-            for (int col = 0; col < SPR_W; col++)
-            {
-                int read = (sPack[i].facing > 0.0f) ? (SPR_W - 1 - col) : col;
-                if (SPRITE[row][read] != 'E') continue;
-
-                float x = originX + (float)col * p;
-                float y = originY + (float)row * p + crouch;
-
-                DrawRectangleRec((Rectangle){ x - p, y - p, p * 3.0f, p * 3.0f },
-                                 Fade(glow, 0.16f * heat));
-                DrawRectangleRec((Rectangle){ x, y, p, p * 2.0f }, Fade(glow, heat));
-            }
-        }
+        DrawEyes(&sPack[i], at);
     }
 }

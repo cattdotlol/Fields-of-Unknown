@@ -1,4 +1,5 @@
 #include "entity/aquatic.h"
+#include "core/rng.h"
 #include "entity/cat.h"
 #include "entity/vitals.h"
 #include "world/daylight.h"
@@ -88,25 +89,21 @@ typedef struct Aquatic {
     bool    active;
 } Aquatic;
 
+#define AQUATIC_SEED 0x5EA51DEu
+
 static Aquatic sLife[AQUATIC_MAX];
-static unsigned int sRng = 0x5EA51DEu;
 
-static float Rand01(void)
-{
-    sRng = sRng * 1664525u + 1013904223u;
-    return (float)((sRng >> 8) & 0xFFFFu) / 65535.0f;
-}
+/* Its own stream. See core/rng.h. */
+static Rng sRng;
 
-static float RandRange(float lo, float hi)
-{
-    return lo + Rand01() * (hi - lo);
-}
+static float Rand01(void)                  { return Rng01(&sRng); }
+static float RandRange(float lo, float hi) { return RngBetween(&sRng, lo, hi); }
 
 void AquaticReset(void)
 {
     for (int i = 0; i < AQUATIC_MAX; i++) sLife[i].active = false;
 
-    sRng = 0x5EA51DEu;
+    RngSeed(&sRng, AQUATIC_SEED);
 }
 
 int AquaticCount(void)

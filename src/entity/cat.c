@@ -1,4 +1,5 @@
 #include "entity/cat.h"
+#include "core/rng.h"
 #include "entity/cat_art.h"
 #include "core/input.h"
 #include "entity/vitals.h"
@@ -63,7 +64,7 @@ typedef struct Cat {
     float    stillFor;     /* seconds spent doing nothing */
     float    blinkWait;    /* seconds until the next blink */
     float    blinkFor;     /* seconds of blink remaining */
-    unsigned int rng;      /* local, so blinking cannot perturb worldgen */
+    Rng  rng;              /* local, so blinking cannot perturb worldgen */
 } Cat;
 
 static Cat sCat;
@@ -78,12 +79,11 @@ static Cat sCat;
    pose the reference art was drawn in, so idling earns it. */
 #define SIT_AFTER 3.5f
 
-/* Local LCG: using the global one would advance the sequence world
-   generation depends on. */
+/* Its own stream: drawing from the world's would advance the sequence
+   generation depends on. See core/rng.h. */
 static float CatRandom(void)
 {
-    sCat.rng = sCat.rng * 1664525u + 1013904223u;
-    return (float)((sCat.rng >> 8) & 0xFFFFu) / 65535.0f;
+    return Rng01(&sCat.rng);
 }
 
 static float BodyHeight(void)
@@ -111,7 +111,7 @@ void CatSpawn(Vector2 position)
     sCat.stillFor = 0.0f;
     sCat.blinkWait = 2.0f;
     sCat.blinkFor = 0.0f;
-    sCat.rng = 0x9E3779B9u;
+    RngSeed(&sCat.rng, 0x9E3779B9u);
 }
 
 static void UpdateNoise(void)

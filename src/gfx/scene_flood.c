@@ -1,4 +1,5 @@
 #include "gfx/scene_flood.h"
+#include "core/rng.h"
 
 #include "world/weather.h"
 #include "world/daylight.h"
@@ -64,17 +65,16 @@ static float sTime;
 static float sFlicker;
 
 /* Also its own: see the note in weather.c. */
-static unsigned int sRng = 1u;
+static Rng sRng = { 1u };
 
 static float Rand01(void)
 {
-    sRng = sRng * 1664525u + 1013904223u;
-    return (float)((sRng >> 8) & 0xFFFFFFu) / (float)0xFFFFFFu;
+    return RngFine(&sRng);
 }
 
 void FloodSceneInit(unsigned int seed)
 {
-    sRng = (seed ^ 0x5EED5EEDu) | 1u;
+    RngSeed(&sRng, (seed ^ 0x5EED5EEDu) | 1u);
 
     for (int i = 0; i < RAIN_COUNT; i++)
     {

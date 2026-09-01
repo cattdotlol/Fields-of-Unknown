@@ -25,6 +25,14 @@ Vector2 TerrainVent(int index);
 bool    TerrainAirAt(Vector2 point);
 bool      TerrainOverlaps(Rectangle box);
 
+/* The top of the highest solid at this x that is still out of the water,
+   or -1 where there is nothing to stand on. `margin` keeps the answer
+   away from the very lip of a ledge, so a wide animal is not spawned
+   half hanging off one; a wide animal should ask for more of it.
+
+   This is how anything that walks gets born somewhere it can survive. */
+float     TerrainDryGroundAt(float x, float margin);
+
 int  TerrainLoadedChunks(void);
 void TerrainLoadedRange(int *first, int *last);
 

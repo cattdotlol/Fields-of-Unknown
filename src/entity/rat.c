@@ -1,8 +1,9 @@
 #include "entity/rat.h"
+#include "core/rng.h"
 #include "entity/cat.h"
+#include "gfx/sprite.h"
 #include "world/physics.h"
 #include "world/terrain.h"
-#include "world/weather.h"
 
 #include <math.h>
 
@@ -75,26 +76,22 @@ typedef struct Rat {
     float    blocked;      /* how long it has been walking into a wall  */
 } Rat;
 
+#define RAT_SEED 0xC0FFEEu
+
 static Rat sRats[RAT_MAX];
-static unsigned int sRng = 0xC0FFEEu;
 
-/* Local, so spawning rats cannot perturb world generation. */
-static float Rand01(void)
-{
-    sRng = sRng * 1664525u + 1013904223u;
-    return (float)((sRng >> 8) & 0xFFFFu) / 65535.0f;
-}
+/* Its own stream, so rats deciding which way to turn cannot perturb
+   world generation. See core/rng.h. */
+static Rng sRng;
 
-static float RandRange(float lo, float hi)
-{
-    return lo + Rand01() * (hi - lo);
-}
+static float Rand01(void)                  { return Rng01(&sRng); }
+static float RandRange(float lo, float hi) { return RngBetween(&sRng, lo, hi); }
 
 void RatsReset(void)
 {
     for (int i = 0; i < RAT_MAX; i++) sRats[i].active = false;
 
-    sRng = 0xC0FFEEu;
+    RngSeed(&sRng, RAT_SEED);
 }
 
 int RatCount(void)
@@ -146,25 +143,8 @@ float RatVelocityX(int index)
 
 /* --- spawning ---------------------------------------------------------- */
 
-/* Top of a solid at this x that is out of the water, or -1. */
-static float DryGroundAt(float x)
-{
-    float best = -1.0f;
-    float water = WeatherWaterY();
-
-    for (int i = 0; i < TerrainCount(); i++)
-    {
-        Rectangle r = TerrainSolid(i);
-
-        if (r.height < 40.0f) continue;                 /* not a ledge */
-        if (x < r.x + 10.0f || x > r.x + r.width - 10.0f) continue;
-        if (r.y >= water) continue;                     /* submerged */
-
-        if (best < 0.0f || r.y < best) best = r.y;
-    }
-
-    return best;
-}
+/* A rat is narrow, so it needs very little of a ledge to stand on. */
+#define FOOTING 10.0f
 
 /* Spawns near a given x rather than near the cat. */
 static void TrySpawnAt(float centreX)
@@ -172,7 +152,7 @@ static void TrySpawnAt(float centreX)
     for (int attempt = 0; attempt < 12; attempt++)
     {
         float x = centreX + RandRange(-160.0f, 160.0f);
-        float ground = DryGroundAt(x);
+        float ground = TerrainDryGroundAt(x, FOOTING);
         if (ground < 0.0f) continue;
 
         for (int i = 0; i < RAT_MAX; i++)
@@ -206,7 +186,7 @@ static void TrySpawn(float catX)
         float side = (Rand01() < 0.5f) ? -1.0f : 1.0f;
         float x = catX + side * RandRange(SPAWN_CLEAR, KEEP_NEAR);
 
-        float ground = DryGroundAt(x);
+        float ground = TerrainDryGroundAt(x, FOOTING);
         if (ground < 0.0f) continue;
 
         for (int i = 0; i < RAT_MAX; i++)
@@ -245,38 +225,11 @@ void RatsForceSpawn(float x)
 
 /* --- behaviour --------------------------------------------------------- */
 
-/* Rats will not walk off into the water. Probe just ahead and below. */
-static bool GroundAhead(const Rat *r)
-{
-    float probeX = r->body.pos.x + r->facing * (BODY_W * 0.6f + 6.0f);
-
-    Rectangle foot = { probeX - 3.0f, r->body.pos.y + 2.0f, 6.0f, 10.0f };
-
-    return TerrainOverlaps(foot);
-}
-
-/* Something solid at head height in front: a wall it could hop onto
-   rather than a drop it should avoid. */
-static bool WallAhead(const Rat *r)
-{
-    float probeX = r->body.pos.x + r->facing * (BODY_W * 0.6f + 4.0f);
-
-    Rectangle chest = { probeX - 3.0f, r->body.pos.y - BODY_H, 6.0f, BODY_H * 0.8f };
-
-    return TerrainOverlaps(chest);
-}
-
-/* Ease toward a wanted speed instead of snapping to it. */
-static void Steer(Rat *r, float wanted, float accel, float dt)
-{
-    float diff = wanted - r->body.vel.x;
-    float step = accel * dt;
-
-    if (diff >  step) diff =  step;
-    if (diff < -step) diff = -step;
-
-    r->body.vel.x += diff;
-}
+/* How far ahead it checks for floor and for walls. A rat looks barely
+   past its own nose, which is why one can be cornered against a channel
+   at all. */
+#define LOOK_DOWN  6.0f
+#define LOOK_WALL  4.0f
 
 static void UpdateOne(Rat *r, float dt, Vector2 catPos, float catNoise)
 {
@@ -408,7 +361,7 @@ static void UpdateOne(Rat *r, float dt, Vector2 catPos, float catNoise)
     /* --- the world gets a say ------------------------------------------ */
     bool moving = (wanted != 0.0f);
 
-    if (moving && r->body.grounded && !GroundAhead(r))
+    if (moving && r->body.grounded && !BodyGroundAhead(&r->body, r->facing, LOOK_DOWN, 10.0f))
     {
         if (r->state == RAT_FLEE && r->dart <= 0.0f && distance < 150.0f)
         {
@@ -427,7 +380,7 @@ static void UpdateOne(Rat *r, float dt, Vector2 catPos, float catNoise)
     }
 
     /* Walking into a wall: hop it, if it is hoppable. */
-    if (moving && WallAhead(r))
+    if (moving && BodyWallAhead(&r->body, r->facing, LOOK_WALL, 6.0f))
     {
         r->blocked += dt;
 
@@ -442,7 +395,7 @@ static void UpdateOne(Rat *r, float dt, Vector2 catPos, float catNoise)
         r->blocked = 0.0f;
     }
 
-    Steer(r, wanted, accel, dt);
+    BodySteerX(&r->body, wanted, accel, dt);
 
     BodyApplyGravity(&r->body, GRAVITY, MAX_FALL, dt);
     BodyMove(&r->body, dt);
@@ -536,10 +489,11 @@ void RatConsume(int index)
 
 #define SPR_W 16
 #define SPR_H 8
+#define SPR_PIXEL 1.5f
 
 /* Authored facing LEFT, like everything else. F fur, K outline, E eye,
    T tail. */
-static const char *SPRITE[SPR_H] = {
+static const char *const SPRITE[SPR_H] = {
     "...KK...........",
     "..KFFK..........",
     ".KFFFFFFFFFFK...",
@@ -550,19 +504,32 @@ static const char *SPRITE[SPR_H] = {
     "...K.K...K.K....",
 };
 
+static const Sprite RAT_ART = { SPRITE, SPR_W, SPR_H, -1.0f };
+
+static Color RatColor(char cell, const void *ctx)
+{
+    (void)ctx;
+
+    switch (cell)
+    {
+        case 'K': return (Color){  26,  22,  22, 255 };   /* outline */
+        case 'E': return (Color){ 190,  80,  70, 255 };   /* eye     */
+        case 'T': return (Color){ 120, 104,  98, 255 };   /* tail    */
+        case 'F': return (Color){  62,  54,  50, 255 };   /* fur     */
+        default:  return BLANK;
+    }
+}
+
 void RatsDraw(float alpha, float left, float right)
 {
-    Color fur  = (Color){ 62, 54, 50, 255 };
-    Color dark = (Color){ 26, 22, 22, 255 };
-    Color eye  = (Color){ 190, 80, 70, 255 };
-    Color tail = (Color){ 120, 104, 98, 255 };
+    float margin = SpriteHalfWidth(RAT_ART, SPR_PIXEL) + 24.0f;
 
     for (int i = 0; i < RAT_MAX; i++)
     {
         if (!sRats[i].active) continue;
 
         Vector2 at = BodyRenderPos(&sRats[i].body, alpha);
-        if (at.x < left - 60.0f || at.x > right + 60.0f) continue;
+        if (at.x < left - margin || at.x > right + margin) continue;
 
         /* Bob follows actual speed rather than the state, so a rat
            easing to a stop settles instead of snapping still. */
@@ -570,29 +537,9 @@ void RatsDraw(float alpha, float left, float right)
         float gait = (speed < 4.0f) ? 0.0f : (speed / SPEED_FLEE);
         if (gait > 1.0f) gait = 1.0f;
 
-        float bob = -fabsf(sinf(sRats[i].stride * 6.28f)) * (0.8f + gait * 1.6f);
+        at.y -= fabsf(sinf(sRats[i].stride * 6.28f)) * (0.8f + gait * 1.6f);
 
-        float px = 1.5f;
-        float originX = at.x - (float)SPR_W * px * 0.5f;
-        float originY = at.y - (float)SPR_H * px + bob;
-
-        for (int row = 0; row < SPR_H; row++)
-        {
-            for (int col = 0; col < SPR_W; col++)
-            {
-                int read = (sRats[i].facing > 0.0f) ? (SPR_W - 1 - col) : col;
-                char c = SPRITE[row][read];
-
-                if (c == '.') continue;
-
-                Color use = fur;
-                if (c == 'K') use = dark;
-                else if (c == 'E') use = eye;
-                else if (c == 'T') use = tail;
-
-                DrawRectangleRec((Rectangle){ originX + (float)col * px,
-                                              originY + (float)row * px, px, px }, use);
-            }
-        }
+        SpriteDrawStanding(RAT_ART, RatColor, NULL, at, SPR_PIXEL,
+                           sRats[i].facing, 1.0f);
     }
 }

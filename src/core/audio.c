@@ -1,4 +1,5 @@
 #include "core/audio.h"
+#include "core/rng.h"
 #include "core/settings.h"
 #include "ui/theme.h"
 #include "entity/stalker.h"
@@ -37,12 +38,11 @@ static Sound sGale;
 static bool  sGaleReady;
 static float sGaleLevel;
 
-static unsigned int sNoise = 0x9E3779B9u;
+static Rng sNoise = { 0x9E3779B9u };
 
 static float WhiteNoise(void)
 {
-    sNoise = sNoise * 1664525u + 1013904223u;
-    return ((float)((sNoise >> 8) & 0xFFFFu) / 32767.5f) - 1.0f;
+    return RngSigned(&sNoise);
 }
 
 /* Thunder is brown noise - white noise integrated - under a slow decay,

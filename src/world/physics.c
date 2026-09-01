@@ -108,3 +108,33 @@ Vector2 BodyRenderPos(const Body *b, float alpha)
         b->prevPos.y + (b->pos.y - b->prevPos.y) * alpha,
     };
 }
+
+void BodySteerX(Body *b, float wanted, float accel, float dt)
+{
+    float diff = wanted - b->vel.x;
+    float step = accel * dt;
+
+    if (diff >  step) diff =  step;
+    if (diff < -step) diff = -step;
+
+    b->vel.x += diff;
+}
+
+bool BodyGroundAhead(const Body *b, float facing, float reach, float depth)
+{
+    float probeX = b->pos.x + facing * (b->width * 0.6f + reach);
+
+    Rectangle foot = { probeX - reach * 0.5f, b->pos.y + 2.0f, reach, depth };
+
+    return TerrainOverlaps(foot);
+}
+
+bool BodyWallAhead(const Body *b, float facing, float reach, float width)
+{
+    float probeX = b->pos.x + facing * (b->width * 0.6f + reach);
+
+    Rectangle chest = { probeX - width * 0.5f, b->pos.y - b->height,
+                        width, b->height * 0.8f };
+
+    return TerrainOverlaps(chest);
+}

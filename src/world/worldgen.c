@@ -1,4 +1,5 @@
 #include "world/worldgen.h"
+#include "core/rng.h"
 #include "entity/cat.h"
 #include "world/ocean.h"
 #include "world/weather.h"
@@ -34,23 +35,27 @@ static unsigned int Hash(unsigned int a, unsigned int b)
     return h;
 }
 
-typedef struct Rand { unsigned int state; } Rand;
+/* A chunk's stream is seeded from where it is rather than carried
+   forward from the last one, which is what makes a chunk the same every
+   time it is built and lets them be built in any order.
+
+   Read at 24 bits: every number here becomes a position or a width, and
+   the two precisions consume the stream differently - see core/rng.h. */
+typedef Rng Rand;
 
 static Rand RandSeed(unsigned int a, unsigned int b)
 {
-    Rand r = { Hash(a, b) | 1u };
+    Rand r;
+    RngSeed(&r, Hash(a, b) | 1u);
+
     return r;
 }
 
-static float RandNext(Rand *r)
-{
-    r->state = r->state * 1664525u + 1013904223u;
-    return (float)((r->state >> 8) & 0xFFFFFFu) / (float)0xFFFFFFu;
-}
+static float RandNext(Rand *r) { return RngFine(r); }
 
 static float RandRange(Rand *r, float lo, float hi)
 {
-    return lo + RandNext(r) * (hi - lo);
+    return RngFineBetween(r, lo, hi);
 }
 
 static float StepUp(void)     { return CatMaxJumpHeight() * REACH_UP; }

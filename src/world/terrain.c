@@ -138,6 +138,29 @@ bool TerrainOverlaps(Rectangle box)
     return false;
 }
 
+/* A slab thinner than this is a ledge - something to hop over, not
+   something an animal can be born standing on. */
+#define STANDABLE 40.0f
+
+float TerrainDryGroundAt(float x, float margin)
+{
+    float best = -1.0f;
+    float water = WeatherWaterY();
+
+    for (int i = 0; i < sFlatCount; i++)
+    {
+        Rectangle r = sFlat[i];
+
+        if (r.height < STANDABLE) continue;
+        if (x < r.x + margin || x > r.x + r.width - margin) continue;
+        if (r.y >= water) continue;                        /* drowned */
+
+        if (best < 0.0f || r.y < best) best = r.y;
+    }
+
+    return best;
+}
+
 int TerrainLoadedChunks(void)
 {
     int n = 0;

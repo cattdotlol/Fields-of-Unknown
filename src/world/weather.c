@@ -1,4 +1,5 @@
 #include "world/weather.h"
+#include "core/rng.h"
 #include "world/season.h"
 
 #include "raylib.h"
@@ -54,12 +55,12 @@ static bool  sThunderPending;
    of numbers a frame from that, so sharing it made the weather depend on
    whether the intro happened to be on screen - and stop being
    reproducible from WORLD_SEED at all. */
-static unsigned int sRng = 1u;
+static Rng sRng = { 1u };
 
 static float Rand01(void)
 {
-    sRng = sRng * 1664525u + 1013904223u;
-    return (float)((sRng >> 8) & 0xFFFFFFu) / (float)0xFFFFFFu;
+    /* Fine, not coarse: these become water levels and rain densities. */
+    return RngFine(&sRng);
 }
 
 /* Weather drifts a step at a time rather than teleporting from dry to
@@ -92,7 +93,7 @@ static void EnterState(WeatherState s)
 
 void WeatherInit(unsigned int seed)
 {
-    sRng = seed | 1u;
+    RngSeed(&sRng, seed | 1u);
 
     sTime = 0.0f;
     sWetness = 0.10f;   /* the ground starts dry; flooding is earned */
