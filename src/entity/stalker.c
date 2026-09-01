@@ -1,6 +1,7 @@
 #include "entity/stalker.h"
 
 #include "core/rng.h"
+#include "entity/creatures.h"
 #include "entity/cat.h"
 #include "entity/vitals.h"
 #include "gfx/sprite.h"
@@ -380,6 +381,13 @@ void StalkersFixedUpdate(float dt)
 
         UpdateOne(&sPack[i], dt, catPos, catNoise);
         alive++;
+
+        /* Nothing eats it, so it is published purely to be feared: a rat
+           reads the census for what would eat a rat, and finds this. */
+        CreaturesPublish(SPECIES_STALKER,
+                         (Vector2){ sPack[i].body.pos.x,
+                                    sPack[i].body.pos.y - BODY_H * 0.5f },
+                         i, 0.0f);
     }
 
     /* One at a time, and never in the first few seconds of a run. More of

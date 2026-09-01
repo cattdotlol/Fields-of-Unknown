@@ -34,6 +34,8 @@ int main(void)
     SuiteDaylight();
     SuiteOcean();
     SuiteAquatic();
+    SuiteSpecies();
+    SuiteCreatures();
 
     printf("\n%s\n", sFailures ? "FAILED" : "all passed");
     return sFailures ? 1 : 0;

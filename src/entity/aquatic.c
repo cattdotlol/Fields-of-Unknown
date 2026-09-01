@@ -1,5 +1,6 @@
 #include "entity/aquatic.h"
 #include "core/rng.h"
+#include "entity/creatures.h"
 #include "entity/cat.h"
 #include "entity/vitals.h"
 #include "world/daylight.h"
@@ -89,6 +90,23 @@ typedef struct Aquatic {
     bool    active;
 } Aquatic;
 
+/* Which entry in the shared table each of these is. The kinds are this
+   module's own vocabulary; species.h is everybody else's, and the food
+   web is written in that one. */
+static const Species AS_SPECIES[AQUA_KIND_COUNT] = {
+    [AQUA_JELLY] = SPECIES_JELLY,
+    [AQUA_SHARK] = SPECIES_SHARK,
+    [AQUA_WHALE] = SPECIES_WHALE,
+};
+
+/* How close the cat has to be to take hold of one. A jellyfish does not
+   evade and barely swims, so it is caught by swimming into it; nothing
+   else down here is picked up at all. */
+static float CatchReach(const Aquatic *a)
+{
+    return (a->kind == AQUA_JELLY) ? 26.0f : 0.0f;
+}
+
 #define AQUATIC_SEED 0x5EA51DEu
 
 static Aquatic sLife[AQUATIC_MAX];
@@ -99,11 +117,25 @@ static Rng sRng;
 static float Rand01(void)                  { return Rng01(&sRng); }
 static float RandRange(float lo, float hi) { return RngBetween(&sRng, lo, hi); }
 
+/* Eaten, by anything. The pool is shared across kinds, so one handler
+   serves all of them. */
+static void AquaticEaten(int tag)
+{
+    if (tag < 0 || tag >= AQUATIC_MAX) return;
+
+    sLife[tag].active = false;
+}
+
 void AquaticReset(void)
 {
     for (int i = 0; i < AQUATIC_MAX; i++) sLife[i].active = false;
 
     RngSeed(&sRng, AQUATIC_SEED);
+
+    for (int k = 0; k < AQUA_KIND_COUNT; k++)
+    {
+        CreaturesOnRemove(AS_SPECIES[k], AquaticEaten);
+    }
 }
 
 int AquaticCount(void)
@@ -455,6 +487,9 @@ void AquaticFixedUpdate(float dt)
         }
 
         UpdateOne(&sLife[i], dt, cat, swimming);
+
+        CreaturesPublish(AS_SPECIES[sLife[i].kind], sLife[i].pos, i,
+                         CatchReach(&sLife[i]));
     }
 
     if (Rand01() < 0.02f)

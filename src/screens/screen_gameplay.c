@@ -7,6 +7,7 @@
 #include "core/input.h"
 #include "entity/aquatic.h"
 #include "entity/cat.h"
+#include "entity/creatures.h"
 #include "entity/rat.h"
 #include "entity/stalker.h"
 #include "entity/vitals.h"
@@ -77,6 +78,7 @@ static void RestartRun(void)
 
     VitalsReset();
     MushroomClearHarvests();
+    CreaturesReset();
     RatsReset();
     StalkersReset();
     AquaticReset();
@@ -215,6 +217,12 @@ static void FixedUpdate(float dt)
 
     if (sHurt > 0.0f) sHurt -= dt * 1.8f;
 
+    /* Open the census before anything moves. Everything alive publishes
+       itself into it as it updates, and what any of them can see is what
+       was in it at the end of the last tick - so the answer does not
+       depend on the order of the calls below. See entity/creatures.h. */
+    CreaturesBeginTick();
+
     CatFixedUpdate(dt);
 
     /* Generate ahead of wherever the cat has got to. */
@@ -245,21 +253,31 @@ static void FixedUpdate(float dt)
     StalkersFixedUpdate(dt);
     AquaticFixedUpdate(dt);
 
-    /* Eating is the only way hunger goes back up. What a species does is
-       not written down anywhere - you find out by trying it. */
+    /* Eating is the only way hunger goes back up. What any of it is worth
+       is not written down anywhere the player can read - you find out by
+       trying it, and a jellyfish is allowed to teach you that lesson the
+       expensive way. */
     if (InputPressed(ACT_EAT))
     {
-        /* A rat is worth far more than a mushroom, so it wins the reach. */
-        int rat = RatCatchable(CatBounds());
+        Rectangle box = CatBounds();
+        Vector2 mouth = { box.x + box.width * 0.5f,
+                          box.y + box.height * 0.5f };
 
-        if (rat >= 0)
+        /* Anything on the cat's menu that is already within its own
+           reach: a rat on land, a fish or a jellyfish underwater. Which
+           of those exist is species.h's business, not this screen's. */
+        const Creature *caught = CreaturesCatchable(SPECIES_CAT, mouth);
+
+        if (caught)
         {
-            RatConsume(rat);
-            VitalsApply(0.45f, 0.05f, 0.10f);
+            Nutrition n = SpeciesOf(caught->species)->food;
+
+            CreaturesConsume(caught);
+            VitalsApply(n.hunger, n.health, n.warmth);
         }
         else
         {
-            int species = TerrainEatAt(CatBounds());
+            int species = TerrainEatAt(box);
 
             if (species >= 0)
             {

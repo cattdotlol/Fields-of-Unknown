@@ -1,5 +1,6 @@
 #include "entity/cat.h"
 #include "core/rng.h"
+#include "entity/creatures.h"
 #include "entity/cat_art.h"
 #include "core/input.h"
 #include "entity/vitals.h"
@@ -272,6 +273,15 @@ void CatFixedUpdate(float dt)
     }
 
     UpdateNoise();
+
+    /* Into the census with everything else. The cat is prey here as much
+       as it is a predator, and the things that hunt it should not need to
+       know it is the player to find it. Reach zero: nothing picks the cat
+       up and eats it, they hunt it down. */
+    CreaturesPublish(SPECIES_CAT,
+                     (Vector2){ sCat.body.pos.x,
+                                sCat.body.pos.y - BodyHeight() * 0.5f },
+                     0, 0.0f);
 }
 
 Vector2  CatPosition(void)     { return sCat.body.pos; }

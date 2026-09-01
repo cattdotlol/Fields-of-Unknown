@@ -1,5 +1,6 @@
 #include "entity/rat.h"
 #include "core/rng.h"
+#include "entity/creatures.h"
 #include "entity/cat.h"
 #include "gfx/sprite.h"
 #include "world/physics.h"
@@ -87,11 +88,33 @@ static Rng sRng;
 static float Rand01(void)                  { return Rng01(&sRng); }
 static float RandRange(float lo, float hi) { return RngBetween(&sRng, lo, hi); }
 
+static void RatEaten(int tag);
+
+/* How close something has to be to actually get hold of this one. A rat
+   that has already bolted is most of the difficulty of catching rats. */
+static float CatchReach(const Rat *r)
+{
+    return (r->state == RAT_FLEE) ? CATCH_FLEEING : CATCH_UNAWARE;
+}
+
+/* Where its body actually is, rather than where its feet are. Everything
+   in the census is published centred so distances between two creatures
+   mean the same thing whoever is asking. */
+static Vector2 Centre(const Rat *r)
+{
+    return (Vector2){ r->body.pos.x, r->body.pos.y - BODY_H * 0.5f };
+}
+
+
 void RatsReset(void)
 {
     for (int i = 0; i < RAT_MAX; i++) sRats[i].active = false;
 
     RngSeed(&sRng, RAT_SEED);
+
+    /* Anything that eats rats goes through this rather than knowing what
+       a rat is. See entity/creatures.h. */
+    CreaturesOnRemove(SPECIES_RAT, RatEaten);
 }
 
 int RatCount(void)
@@ -424,6 +447,9 @@ void RatsFixedUpdate(float dt)
 
         UpdateOne(&sRats[i], dt, catPos, catNoise);
         alive++;
+
+        CreaturesPublish(SPECIES_RAT, Centre(&sRats[i]), i,
+                         CatchReach(&sRats[i]));
     }
 
     /* One rat bolting takes the others with it - a group scatters, it
@@ -462,13 +488,13 @@ int RatCatchable(Rectangle catBox)
     {
         if (!sRats[i].active) continue;
 
-        float dx = sRats[i].body.pos.x - cx;
-        float dy = (sRats[i].body.pos.y - BODY_H * 0.5f) - cy;
+        Vector2 at = Centre(&sRats[i]);
+
+        float dx = at.x - cx;
+        float dy = at.y - cy;
         float distance = sqrtf(dx * dx + dy * dy);
 
-        float reach = (sRats[i].state == RAT_FLEE) ? CATCH_FLEEING : CATCH_UNAWARE;
-
-        if (distance > reach) continue;
+        if (distance > CatchReach(&sRats[i])) continue;
         if (best >= 0 && distance >= bestDistance) continue;
 
         best = i;
@@ -483,6 +509,11 @@ void RatConsume(int index)
     if (index < 0 || index >= RAT_MAX) return;
 
     sRats[index].active = false;
+}
+
+static void RatEaten(int tag)
+{
+    RatConsume(tag);
 }
 
 /* --- drawing ----------------------------------------------------------- */
