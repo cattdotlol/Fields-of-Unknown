@@ -52,4 +52,22 @@ bool InputActionRebindable(InputAction action);
 /* Whichever action already uses this key, or ACT_COUNT if it is free. */
 InputAction InputActionUsing(int key, InputAction ignore);
 
+/* --- driving it from something that is not a keyboard -------------------
+   The point of routing everything through actions is that the source can
+   be swapped. That only pays off if something actually does: the tests
+   need a cat that swims hard on demand, with no window and no devices,
+   and a replay or a recorded demo would want exactly the same door.
+
+   While a script is running, InputPoll leaves the real devices alone and
+   the actions read back whatever was last set. Edges still work, so a
+   scripted press is seen once, the same as a real one. */
+void InputScriptBegin(void);
+void InputScriptEnd(void);
+bool InputScripted(void);
+
+/* Sets an action for every poll from here on. Call InputPoll between
+   ticks to advance the edges. */
+void InputScriptHold(InputAction action, bool down);
+void InputScriptRelease(void);      /* lets go of everything */
+
 #endif /* CORE_INPUT_H */

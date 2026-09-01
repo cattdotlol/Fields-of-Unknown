@@ -15,6 +15,10 @@ static int  sPads[ACT_COUNT];      /* one gamepad button per action, -1 for none
 static bool sDown[ACT_COUNT];
 static bool sPrev[ACT_COUNT];
 
+/* Set by a script rather than by a device. See the note in the header. */
+static bool sScripted;
+static bool sHeld[ACT_COUNT];
+
 static void Bind3(InputAction a, int k0, int k1, int k2, int pad)
 {
     sKeys[a][0] = k0;
@@ -179,6 +183,15 @@ void InputPoll(void)
 {
     memcpy(sPrev, sDown, sizeof(sDown));
 
+    if (sScripted)
+    {
+        /* Devices are not touched at all: a test has no window to read
+           them from, and a replay must not be perturbed by whoever is
+           watching it. */
+        memcpy(sDown, sHeld, sizeof(sDown));
+        return;
+    }
+
     for (int a = 0; a < ACT_COUNT; a++) sDown[a] = RawDown((InputAction)a);
 
     /* Stick counts as a direction hold. */
@@ -244,4 +257,41 @@ int InputBinding(InputAction action, int slot)
     if (slot < 0 || slot >= INPUT_MAX_BINDINGS) return 0;
 
     return sKeys[action][slot];
+}
+
+/* --- scripted input ---------------------------------------------------- */
+
+void InputScriptBegin(void)
+{
+    sScripted = true;
+
+    memset(sHeld, 0, sizeof(sHeld));
+    memset(sDown, 0, sizeof(sDown));
+    memset(sPrev, 0, sizeof(sPrev));
+}
+
+void InputScriptEnd(void)
+{
+    sScripted = false;
+
+    memset(sHeld, 0, sizeof(sHeld));
+    memset(sDown, 0, sizeof(sDown));
+    memset(sPrev, 0, sizeof(sPrev));
+}
+
+bool InputScripted(void)
+{
+    return sScripted;
+}
+
+void InputScriptHold(InputAction action, bool down)
+{
+    if (action < 0 || action >= ACT_COUNT) return;
+
+    sHeld[action] = down;
+}
+
+void InputScriptRelease(void)
+{
+    memset(sHeld, 0, sizeof(sHeld));
 }

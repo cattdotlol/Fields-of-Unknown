@@ -39,8 +39,8 @@ static void TestWhatGoesInComesOut(void)
     /* Two ticks: things published during the first are readable during
        the second. */
     CreaturesBeginTick();
-    CreaturesPublish(SPECIES_RAT, (Vector2){ 100.0f, 0.0f }, 7, 30.0f);
-    CreaturesPublish(SPECIES_CAT, (Vector2){ 120.0f, 0.0f }, 0, 0.0f);
+    CreaturesPublish(SPECIES_RAT, (Vector2){ 100.0f, 0.0f }, 7, 30.0f, 0.0f);
+    CreaturesPublish(SPECIES_CAT, (Vector2){ 120.0f, 0.0f }, 0, 0.0f, 0.0f);
 
     Check("nothing is visible in the tick it is published",
           CreaturesCount() == 0, true);
@@ -76,7 +76,7 @@ static void TestRangeIsRespected(void)
     CreaturesReset();
 
     CreaturesBeginTick();
-    CreaturesPublish(SPECIES_RAT, (Vector2){ 900.0f, 0.0f }, 1, 30.0f);
+    CreaturesPublish(SPECIES_RAT, (Vector2){ 900.0f, 0.0f }, 1, 30.0f, 0.0f);
     CreaturesBeginTick();
 
     Vector2 here = { 0.0f, 0.0f };
@@ -94,9 +94,9 @@ static void TestTheDietDecidesWhoSeesWhom(void)
     Vector2 here = { 0.0f, 0.0f };
 
     CreaturesBeginTick();
-    CreaturesPublish(SPECIES_RAT,     (Vector2){  40.0f, 0.0f }, 0, 30.0f);
-    CreaturesPublish(SPECIES_STALKER, (Vector2){  80.0f, 0.0f }, 0,  0.0f);
-    CreaturesPublish(SPECIES_WHALE,   (Vector2){ 120.0f, 0.0f }, 0,  0.0f);
+    CreaturesPublish(SPECIES_RAT,     (Vector2){  40.0f, 0.0f }, 0, 30.0f, 0.0f);
+    CreaturesPublish(SPECIES_STALKER, (Vector2){  80.0f, 0.0f }, 0,  0.0f, 0.0f);
+    CreaturesPublish(SPECIES_WHALE,   (Vector2){ 120.0f, 0.0f }, 0,  0.0f, 0.0f);
     CreaturesBeginTick();
 
     const Creature *catFood = CreaturesNearestPrey(SPECIES_CAT, here, 500.0f);
@@ -127,7 +127,7 @@ static void TestReachIsTheCreatureSOwnBusiness(void)
     /* Same species, same distance, different reach: one has noticed the
        cat and one has not. */
     CreaturesBeginTick();
-    CreaturesPublish(SPECIES_RAT, (Vector2){ 20.0f, 0.0f }, 1, 30.0f);
+    CreaturesPublish(SPECIES_RAT, (Vector2){ 20.0f, 0.0f }, 1, 30.0f, 0.0f);
     CreaturesBeginTick();
 
     Vector2 here = { 0.0f, 0.0f };
@@ -136,7 +136,7 @@ static void TestReachIsTheCreatureSOwnBusiness(void)
           CreaturesCatchable(SPECIES_CAT, here) != NULL, true);
 
     CreaturesBeginTick();
-    CreaturesPublish(SPECIES_RAT, (Vector2){ 20.0f, 0.0f }, 1, 15.0f);
+    CreaturesPublish(SPECIES_RAT, (Vector2){ 20.0f, 0.0f }, 1, 15.0f, 0.0f);
     CreaturesBeginTick();
 
     Check("a bolting one at the same distance is not",
@@ -146,7 +146,7 @@ static void TestReachIsTheCreatureSOwnBusiness(void)
        it gets - a stalker is not lunch just because it is standing on
        you. Published at zero, and the cat does not eat stalkers anyway. */
     CreaturesBeginTick();
-    CreaturesPublish(SPECIES_STALKER, (Vector2){ 1.0f, 0.0f }, 0, 0.0f);
+    CreaturesPublish(SPECIES_STALKER, (Vector2){ 1.0f, 0.0f }, 0, 0.0f, 0.0f);
     CreaturesBeginTick();
 
     Check("and a stalker underfoot is not a meal",
@@ -159,7 +159,7 @@ static void TestEatingRemovesItFromTheWorld(void)
     sRemoved = 0;
 
     CreaturesBeginTick();
-    CreaturesPublish(SPECIES_RAT, (Vector2){ 5.0f, 0.0f }, 3, 30.0f);
+    CreaturesPublish(SPECIES_RAT, (Vector2){ 5.0f, 0.0f }, 3, 30.0f, 0.0f);
     CreaturesBeginTick();
 
     const Creature *rat = CreaturesCatchable(SPECIES_CAT,

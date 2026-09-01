@@ -448,8 +448,12 @@ void RatsFixedUpdate(float dt)
         UpdateOne(&sRats[i], dt, catPos, catNoise);
         alive++;
 
+        /* A bolting rat is a racket; a foraging one is almost nothing.
+           Nothing reads this yet - the stalker hunts the cat by ear -
+           but a rat is not silent and the census should not say it is. */
         CreaturesPublish(SPECIES_RAT, Centre(&sRats[i]), i,
-                         CatchReach(&sRats[i]));
+                         CatchReach(&sRats[i]),
+                         (sRats[i].state == RAT_FLEE) ? 0.45f : 0.08f);
     }
 
     /* One rat bolting takes the others with it - a group scatters, it

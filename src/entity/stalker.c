@@ -387,7 +387,8 @@ void StalkersFixedUpdate(float dt)
         CreaturesPublish(SPECIES_STALKER,
                          (Vector2){ sPack[i].body.pos.x,
                                     sPack[i].body.pos.y - BODY_H * 0.5f },
-                         i, 0.0f);
+                         i, 0.0f,
+                         (sPack[i].state == STALK_PROWL) ? 0.5f : 1.0f);
     }
 
     /* One at a time, and never in the first few seconds of a run. More of

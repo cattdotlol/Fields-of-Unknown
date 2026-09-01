@@ -28,7 +28,8 @@ void CreaturesBeginTick(void)
     sCount[sWrite] = 0;
 }
 
-void CreaturesPublish(Species s, Vector2 pos, int tag, float reach)
+void CreaturesPublish(Species s, Vector2 pos, int tag,
+                      float reach, float noise)
 {
     if (sCount[sWrite] >= CREATURES_MAX) return;
 
@@ -41,6 +42,7 @@ void CreaturesPublish(Species s, Vector2 pos, int tag, float reach)
         .height = t->height,
         .tag = tag,
         .reach = reach,
+        .noise = noise,
     };
 }
 

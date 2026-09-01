@@ -98,6 +98,43 @@ static void TestBindingsSurviveASave(void)
     InputResetDefaults();
 }
 
+/* The whole reason nothing asks for a key: the source can be swapped.
+   Half the underwater behaviour is only testable because of this, and a
+   replay would need the same door. */
+static void TestSomethingOtherThanAKeyboardCanDriveIt(void)
+{
+    Check("nothing is driving it to begin with", InputScripted(), false);
+
+    InputScriptBegin();
+
+    Check("now something is", InputScripted(), true);
+
+    InputScriptHold(ACT_RIGHT, true);
+    InputPoll();
+
+    Check("a held action reads as held", InputDown(ACT_RIGHT), true);
+    Check("and as a press, once", InputPressed(ACT_RIGHT), true);
+    Check("the axis follows it", InputAxisX() > 0.0f, true);
+    Check("and nothing else is held", InputDown(ACT_LEFT), false);
+
+    InputPoll();
+
+    Check("holding it is not pressing it again", InputPressed(ACT_RIGHT), false);
+    Check("but it is still down", InputDown(ACT_RIGHT), true);
+
+    InputScriptRelease();
+    InputPoll();
+
+    Check("letting go lets go", InputDown(ACT_RIGHT), false);
+    Check("and reads as a release", InputReleased(ACT_RIGHT), true);
+
+    InputScriptEnd();
+    InputPoll();
+
+    Check("and the devices have it back", InputScripted(), false);
+    Check("with nothing left held", InputDown(ACT_RIGHT), false);
+}
+
 void SuiteInput(void)
 {
     TestDefaults();
@@ -105,4 +142,5 @@ void SuiteInput(void)
     TestKeyNames();
     TestConflictDetection();
     TestBindingsSurviveASave();
+    TestSomethingOtherThanAKeyboardCanDriveIt();
 }

@@ -41,6 +41,13 @@ typedef struct Creature {
        the whole rat minigame, so the reach is published per tick by the
        module that knows. Zero means it cannot be caught at all. */
     float   reach;
+
+    /* How much it is announcing itself, 0 to 1. Being seen is not what
+       gets anything caught in this game - being heard is. A cat that
+       drifts through a school is a shape in the murk; the same cat
+       swimming hard is a predator, and the fish are gone before it
+       arrives. Prey reads this, so how you move is the whole game. */
+    float   noise;
 } Creature;
 
 void CreaturesReset(void);
@@ -51,7 +58,8 @@ void CreaturesReset(void);
 void CreaturesBeginTick(void);
 
 /* Called by each creature module, once per live animal per tick. */
-void CreaturesPublish(Species s, Vector2 pos, int tag, float reach);
+void CreaturesPublish(Species s, Vector2 pos, int tag,
+                      float reach, float noise);
 
 int             CreaturesCount(void);
 int             CreaturesCountOf(Species s);

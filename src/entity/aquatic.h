@@ -1,6 +1,8 @@
 #ifndef ENTITY_AQUATIC_H
 #define ENTITY_AQUATIC_H
 
+#include "entity/species.h"
+
 #include "raylib.h"
 
 #include <stdbool.h>
@@ -22,14 +24,23 @@
    answer is to get out, not to outswim it. Jellyfish are harmless: they
    drift, they glow, and down there they are the only light. The whale
    is neither - it works the whole column, and it goes deeper than the
-   cat can follow. */
+   cat can follow.
 
-#define AQUATIC_MAX 14
+   Fish are why any of it is worth the trip. They school, they scatter
+   from anything that eats them, and a spooked one swims faster than the
+   cat does - so they are caught the way rats are caught, by arriving
+   before they know about it. They are also what the shark actually
+   lives on, which is what makes the water a food chain the cat has
+   walked into rather than a trap built around it. */
+
+/* Fish are most of this: a school has to look like a school. */
+#define AQUATIC_MAX 40
 
 typedef enum AquaticKind {
     AQUA_JELLY = 0,
     AQUA_SHARK,
     AQUA_WHALE,
+    AQUA_FISH,
     AQUA_KIND_COUNT
 } AquaticKind;
 
@@ -41,9 +52,19 @@ int         AquaticCount(void);
 int         AquaticCountOf(AquaticKind kind);
 bool        AquaticActive(int index);
 AquaticKind AquaticKindOf(int index);
+
+/* The same animal as the rest of the game knows it. Kinds are this
+   module's private vocabulary; the food web is written in species. */
+Species     AquaticSpeciesOf(int index);
 Vector2     AquaticPosition(int index);
 float       AquaticGlow(int index);      /* 0 for anything that does not */
 bool        AquaticHunting(int index);
+
+/* How alarmed a fish is, 0 to 1 - the same number its catch reach is
+   read off. Nothing in the game uses it; the tests and the debug overlay
+   do, because a school that never calms down looks identical from the
+   outside to one that was never frightened. */
+float       AquaticAlarm(int index);
 
 void AquaticForceSpawn(AquaticKind kind, float x);   /* dev tools */
 

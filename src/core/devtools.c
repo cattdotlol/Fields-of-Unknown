@@ -1,4 +1,5 @@
 #include "core/devtools.h"
+#include "entity/aquatic.h"
 
 #include "raylib.h"
 
@@ -44,6 +45,7 @@ typedef enum Row {
     ROW_HEAL,
     ROW_SPAWN_RAT,
     ROW_SPAWN_STALKER,
+    ROW_SPAWN_SCHOOL,
     ROW_WARP,
     ROW_COUNT
 } Row;
@@ -134,6 +136,16 @@ static void Activate(void)
         case ROW_SPAWN_RAT:     RatsForceSpawn(CatPosition().x + 120.0f); break;
         case ROW_SPAWN_STALKER: StalkersForceSpawn(CatPosition().x + 420.0f); break;
 
+        /* Six of them, spread out, so it reads as a school rather than
+           as one fish repeated. They find each other within a second. */
+        case ROW_SPAWN_SCHOOL:
+            for (int i = 0; i < 6; i++)
+            {
+                AquaticForceSpawn(AQUA_FISH,
+                                  CatPosition().x + 200.0f + (float)i * 26.0f);
+            }
+            break;
+
         default: Adjust(1); break;
     }
 }
@@ -173,6 +185,7 @@ static const char *LABELS[ROW_COUNT] = {
     [ROW_HEAL]           = "REFILL VITALS",
     [ROW_SPAWN_RAT]      = "SPAWN RAT",
     [ROW_SPAWN_STALKER]  = "SPAWN STALKER",
+    [ROW_SPAWN_SCHOOL]   = "SPAWN SCHOOL",
     [ROW_WARP]           = "WARP",
 };
 

@@ -57,6 +57,7 @@ typedef struct Cat {
     float    facing;       /* +1 right, -1 left */
     bool     crouching;
     bool     swimming;
+    float    effort;       /* 0..1, how hard it is working the water */
     bool     submerged;
     float    coyote;
     float    buffer;
@@ -127,7 +128,13 @@ static void UpdateNoise(void)
         case CAT_WALK:   base = 0.30f; break;
         case CAT_RUN:    base = 0.78f; break;
         case CAT_AIR:    base = 0.20f; break;
-        case CAT_SWIM:   base = 0.62f; break;
+        /* Effort, not speed. Measured: at seven hundred down the
+           buoyancy alone holds the cat at its terminal rise the whole
+           time, so anything read off velocity says a cat hanging
+           motionless in the dark is thrashing. Being dragged upward is
+           not a noise; kicking is. Drifting in on the current is the
+           only way anything down there is ever caught. */
+        case CAT_SWIM:   base = 0.08f + sCat.effort * 0.62f; break;
         default: break;
     }
 
@@ -174,6 +181,10 @@ void CatFixedUpdate(float dt)
         bool diving = InputDown(ACT_DOWN) || InputDown(ACT_CROUCH);
         bool rising = InputDown(ACT_UP);
 
+        /* What it is actually doing, for anything listening. */
+        sCat.effort = fabsf(move) + ((diving || rising) ? 0.7f : 0.0f);
+        if (sCat.effort > 1.0f) sCat.effort = 1.0f;
+
         if (diving)       sCat.body.vel.y += SWIM_DIVE * dt;
         else if (rising)  sCat.body.vel.y -= SWIM_RISE * dt;
         else              sCat.body.vel.y += (SWIM_SINK - depth * SWIM_BUOYANCY * 0.02f) * dt;
@@ -194,6 +205,8 @@ void CatFixedUpdate(float dt)
     }
     else
     {
+        sCat.effort = 0.0f;
+
         bool wantCrouch = InputDown(ACT_CROUCH) && sCat.body.grounded;
 
         /* Never stand up into a ceiling. */
@@ -281,7 +294,7 @@ void CatFixedUpdate(float dt)
     CreaturesPublish(SPECIES_CAT,
                      (Vector2){ sCat.body.pos.x,
                                 sCat.body.pos.y - BodyHeight() * 0.5f },
-                     0, 0.0f);
+                     0, 0.0f, sCat.noise);
 }
 
 Vector2  CatPosition(void)     { return sCat.body.pos; }

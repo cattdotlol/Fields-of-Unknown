@@ -6,6 +6,8 @@
 #include "tests.h"
 
 #include "entity/aquatic.h"
+#include "core/input.h"
+#include "entity/creatures.h"
 #include "entity/cat.h"
 #include "entity/vitals.h"
 #include "world/daylight.h"
@@ -15,6 +17,7 @@
 #include "world/weather.h"
 #include "world/worldgen.h"
 
+#include <math.h>
 #include <stdio.h>
 
 #define TICK (1.0f / 60.0f)
@@ -27,16 +30,54 @@ static void Prepare(float hour)
     DaylightInit();
     DaylightSetTime(hour);
     VitalsReset();
+    CreaturesReset();
     AquaticReset();
 
     CatSpawn(WorldSpawnPoint());
     TerrainStream(CatPosition().x);
 }
 
-/* Populates the sea and lets it settle at whatever hour it is. */
+/* Populates the sea and lets it settle at whatever hour it is. Drives
+   the census the way the gameplay screen does, or nothing down there can
+   see anything else and half the behaviour never runs. */
 static void Settle(int seconds)
 {
-    for (int i = 0; i < 60 * seconds; i++) AquaticFixedUpdate(TICK);
+    for (int i = 0; i < 60 * seconds; i++)
+    {
+        CreaturesBeginTick();
+        CatFixedUpdate(TICK);
+        AquaticFixedUpdate(TICK);
+    }
+}
+
+/* Mean distance from each fish to the nearest other fish. A school is
+   tight; a sprinkle is not. */
+static float SchoolTightness(void)
+{
+    float sum = 0.0f;
+    int n = 0;
+
+    for (int i = 0; i < AQUATIC_MAX; i++)
+    {
+        if (!AquaticActive(i) || AquaticKindOf(i) != AQUA_FISH) continue;
+
+        float best = 1e9f;
+
+        for (int j = 0; j < AQUATIC_MAX; j++)
+        {
+            if (j == i || !AquaticActive(j) || AquaticKindOf(j) != AQUA_FISH) continue;
+
+            Vector2 a = AquaticPosition(i), b = AquaticPosition(j);
+            float dx = a.x - b.x, dy = a.y - b.y;
+            float d = sqrtf(dx * dx + dy * dy);
+
+            if (d < best) best = d;
+        }
+
+        if (best < 1e8f) { sum += best; n++; }
+    }
+
+    return n ? sum / (float)n : -1.0f;
 }
 
 static float MeanDepth(AquaticKind kind)
@@ -62,11 +103,12 @@ static void TestTheSeaFillsUp(void)
     Prepare(0.5f);
     Settle(400);
 
-    printf("    %d jellyfish, %d shark(s), %d whale\n",
+    printf("    %d jellyfish, %d shark(s), %d whale, %d fish\n",
            AquaticCountOf(AQUA_JELLY), AquaticCountOf(AQUA_SHARK),
-           AquaticCountOf(AQUA_WHALE));
+           AquaticCountOf(AQUA_WHALE), AquaticCountOf(AQUA_FISH));
 
     Check("jellyfish turn up", AquaticCountOf(AQUA_JELLY) > 0, true);
+    Check("and so do fish", AquaticCountOf(AQUA_FISH) > 0, true);
     Check("so do sharks", AquaticCountOf(AQUA_SHARK) > 0, true);
     Check("and never more than the cap", AquaticCount() <= AQUATIC_MAX, true);
 }
@@ -219,12 +261,15 @@ static void TestJellyfishStillCostNothing(void)
         float before = gVitals.health;
         AquaticFixedUpdate(TICK);
 
-        /* Anything that bites, anywhere near. */
+        /* Anything that bites, anywhere near. Asked of the food web
+           rather than listed here, so an animal added later is counted
+           without anyone remembering to come back and add it. */
         bool alone = true;
 
         for (int i = 0; i < AQUATIC_MAX; i++)
         {
-            if (!AquaticActive(i) || AquaticKindOf(i) == AQUA_JELLY) continue;
+            if (!AquaticActive(i)) continue;
+            if (!SpeciesEats(AquaticSpeciesOf(i), SPECIES_CAT)) continue;
 
             Vector2 p = AquaticPosition(i);
             float dx = p.x - jelly.x, dy = p.y - jelly.y;
@@ -247,6 +292,192 @@ static void TestJellyfishStillCostNothing(void)
     Check("and swimming through it costs nothing", hurt == 0, true);
 }
 
+static void TestFishSchool(void)
+{
+    Prepare(0.5f);
+    Settle(400);
+
+    float gap = SchoolTightness();
+
+    printf("    %d fish, nearest neighbour %.0f away on average\n",
+           AquaticCountOf(AQUA_FISH), (double)gap);
+
+    Check("there is a school", AquaticCountOf(AQUA_FISH) > 4, true);
+
+    /* They spawn in a cluster, so this only means anything if it is
+       still true after four hundred seconds of swimming. Loose enough
+       not to be a heap, tight enough not to be a sprinkle. */
+    Check("and it holds together", gap > 0.0f && gap < 60.0f, true);
+}
+
+/* How much of the school is calm enough to be caught right now. */
+static float CalmFraction(void)
+{
+    int calm = 0, fish = 0;
+
+    for (int i = 0; i < AQUATIC_MAX; i++)
+    {
+        if (!AquaticActive(i) || AquaticKindOf(i) != AQUA_FISH) continue;
+
+        fish++;
+        if (AquaticAlarm(i) < 0.4f) calm++;
+    }
+
+    return fish ? (float)calm / (float)fish : -1.0f;
+}
+
+static void TestTheSchoolIsLeftAloneToBeASchool(void)
+{
+    /* A shark that never stops hunting lives inside the school, which
+       holds every fish in it at full alarm forever - and a permanently
+       alarmed fish cannot be caught by anything slower than a shark,
+       the cat included. Sharks feeding and then leaving is what gives
+       the water its quiet.
+
+       Sampled over two minutes rather than at one instant: whether a
+       shark happens to be in the school at any given second is luck,
+       and the claim being made is that the quiet exists at all. */
+    Prepare(0.5f);
+    Settle(400);
+
+    float best = 0.0f;
+    int quietSeconds = 0;
+
+    for (int sec = 0; sec < 120; sec++)
+    {
+        Settle(1);
+
+        float calm = CalmFraction();
+        if (calm > best) best = calm;
+        if (calm > 0.5f) quietSeconds++;
+    }
+
+    printf("    over two minutes: at best %.0f%% of the school was calm, "
+           "and it was mostly calm for %ds\n",
+           (double)(best * 100.0f), quietSeconds);
+
+    Check("the school gets left alone", best > 0.5f, true);
+    Check("and stays that way for a while", quietSeconds > 20, true);
+}
+
+static void TestSharksLiveOnFishRatherThanOnYou(void)
+{
+    /* The cat never enters the water in this one. Anything the school
+       loses, it loses to the sharks. */
+    Prepare(0.5f);
+    Settle(400);
+
+    int start = AquaticCountOf(AQUA_FISH);
+    int low = start;
+
+    for (int t = 0; t < 60 * 600; t++)
+    {
+        CreaturesBeginTick();
+        CatFixedUpdate(TICK);
+        AquaticFixedUpdate(TICK);
+
+        int now = AquaticCountOf(AQUA_FISH);
+        if (now < low) low = now;
+    }
+
+    int end = AquaticCountOf(AQUA_FISH);
+
+    printf("    ten minutes later: %d fish, having dipped to %d (from %d)\n",
+           end, low, start);
+
+    /* Something ate some of them. */
+    Check("the sharks take fish", low < start, true);
+
+    /* But not all of them: a predator that empties the sea is a bug,
+       not a food chain. */
+    Check("and the sea does not end up empty", end > 0, true);
+}
+
+/* The index of a fish that has not noticed anything, letting the sea run
+   until one turns up. A player waits for this too. */
+static int CalmFish(int patienceSeconds)
+{
+    for (int sec = 0; sec < patienceSeconds; sec++)
+    {
+        for (int i = 0; i < AQUATIC_MAX; i++)
+        {
+            if (!AquaticActive(i) || AquaticKindOf(i) != AQUA_FISH) continue;
+            if (AquaticAlarm(i) < 0.15f) return i;
+        }
+
+        Settle(1);
+    }
+
+    return -1;
+}
+
+/* Holds the cat on top of a fish for a while and counts the ticks it
+   could have taken it. `working` decides the only thing that differs
+   between the two approaches: whether the cat is swimming at the fish or
+   letting itself drift onto it. */
+static int TicksCatchable(int fish, int seconds, bool working)
+{
+    int got = 0;
+
+    InputScriptBegin();
+    InputScriptHold(ACT_RIGHT, working);
+    InputScriptHold(ACT_DOWN, working);
+
+    for (int t = 0; t < 60 * seconds; t++)
+    {
+        if (!AquaticActive(fish) || AquaticKindOf(fish) != AQUA_FISH) break;
+
+        /* Pinned in place, so distance is never what decides it. */
+        CatSpawn(AquaticPosition(fish));
+
+        InputPoll();
+
+        CreaturesBeginTick();
+        CatFixedUpdate(TICK);
+        AquaticFixedUpdate(TICK);
+
+        Rectangle box = CatBounds();
+        Vector2 mouth = { box.x + box.width * 0.5f, box.y + box.height * 0.5f };
+
+        const Creature *c = CreaturesCatchable(SPECIES_CAT, mouth);
+        if (c && c->species == SPECIES_FISH) got++;
+    }
+
+    InputScriptEnd();
+
+    return got;
+}
+
+static void TestAQuietCatCanEatAndALoudOneCannot(void)
+{
+    /* The whole reason to dive. Noise is the currency on land - a rat
+       hears you coming - and it is the currency down here too, except
+       that the cat is a poor swimmer, so easing in is the only approach
+       that works at all. */
+    Prepare(0.5f);
+    Settle(400);
+
+    int f = CalmFish(90);
+
+    Check("a fish that has not noticed anything turns up", f >= 0, true);
+    if (f < 0) return;
+
+    int quiet = TicksCatchable(f, 2, false);
+
+    printf("    drifting onto one: catchable on %d of 120 ticks\n", quiet);
+    Check("a cat that eases in gets hold of one", quiet > 0, true);
+
+    /* Same fish, held at the same distance: the only thing that differs
+       is whether the cat is working the water or letting it carry it. */
+    f = CalmFish(90);
+    if (f < 0) return;
+
+    int loud = TicksCatchable(f, 2, true);
+
+    printf("    and thrashing at one: %d\n", loud);
+    Check("and one that thrashes loses it", loud < quiet, true);
+}
+
 void SuiteAquatic(void)
 {
     TestTheSeaFillsUp();
@@ -255,6 +486,10 @@ void SuiteAquatic(void)
     TestTheGlowGoesWhereTheDarkIs();
     TestTheWhaleWorksTheWholeColumn();
     TestJellyfishStillCostNothing();
+    TestFishSchool();
+    TestTheSchoolIsLeftAloneToBeASchool();
+    TestSharksLiveOnFishRatherThanOnYou();
+    TestAQuietCatCanEatAndALoudOneCannot();
 
     /* This suite leaves the clock wherever the last test put it. */
     DaylightInit();
