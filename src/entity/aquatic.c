@@ -24,10 +24,6 @@
 #define SHARK_DAMAGE    0.25f
 #define SHARK_COOL      2.6f
 
-#define JELLY_STING    22.0f
-#define JELLY_DAMAGE    0.06f
-#define JELLY_COOL      1.4f
-
 #define SPAWN_NEAR   1500.0f
 #define SPAWN_CLEAR   340.0f
 #define DESPAWN      2600.0f
@@ -268,7 +264,9 @@ static void UpdateOne(Aquatic *a, float dt, Vector2 cat, bool catSwimming)
         case AQUA_JELLY:
         default:
         {
-            /* Pulse upward, then sink. */
+            /* Pulse upward, then sink. Nothing else: the cat can swim
+               straight through one, which is what makes the light worth
+               swimming towards. */
             float pulse = sinf(a->phase * 1.6f);
             Vector2 wanted = { a->facing * JELLY_SPEED * 0.4f,
                                (pulse > 0.6f) ? -JELLY_SPEED : 12.0f };
@@ -282,11 +280,6 @@ static void UpdateOne(Aquatic *a, float dt, Vector2 cat, bool catSwimming)
                 a->timer = RandRange(4.0f, 10.0f);
             }
 
-            if (distance < JELLY_STING + a->size && a->cooldown <= 0.0f && catSwimming)
-            {
-                a->cooldown = JELLY_COOL;
-                VitalsApply(0.0f, -JELLY_DAMAGE, -0.05f);
-            }
             break;
         }
     }

@@ -10,7 +10,8 @@
    Land has the stalker; water gets its own reasons to be careful. A shark
    swims faster than the cat can, so once one has noticed you the answer
    is to get out, not to outswim it - which is what makes breath and
-   diving matter. Jellyfish are slow and mostly avoidable, and glow.
+   diving matter. Jellyfish are harmless: they drift, they glow, and
+   below the surface they are the only light there is.
    Whales are neither: they are just enormous and pass by. */
 
 #define AQUATIC_MAX 14
