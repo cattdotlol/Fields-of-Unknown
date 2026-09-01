@@ -1,6 +1,6 @@
 #include "entity/cat_art.h"
 
-#include <math.h>
+#include "gfx/sprite.h"
 
 const char *const CatArtSit[CAT_ART_H] = {
     "...D......D..........",
@@ -44,39 +44,37 @@ Color CatArtColor(char cell)
     }
 }
 
+/* What the blitter needs to know that the grid does not say. */
+typedef struct CatPaint {
+    float eyesOpen;
+} CatPaint;
+
+static Color CatCell(char cell, const void *ctx)
+{
+    const CatPaint *paint = (const CatPaint *)ctx;
+
+    /* Shut eyes read as fur, not as holes. */
+    if (cell == 'E' && paint && paint->eyesOpen < 0.5f) cell = 'D';
+
+    return CatArtColor(cell);
+}
+
 void CatArtDrawFrame(const char *const *rows, int w, int h,
                      float x, float y, float cellW, float cellH,
                      float facing, float eyesOpen, float fade, float clipBelowY)
 {
-    /* Mirror only when the wanted facing differs from the art's. */
-    bool mirror = (facing * CAT_ART_AUTHORED_FACING) < 0.0f;
+    Sprite sprite = { rows, w, h, CAT_ART_AUTHORED_FACING };
+    CatPaint paint = { eyesOpen };
 
-    for (int row = 0; row < h; row++)
-    {
-        for (int col = 0; col < w; col++)
-        {
-            int read = mirror ? (w - 1 - col) : col;
-            char cell = rows[row][read];
+    SpriteStyle style = {
+        .cellW = cellW,
+        .cellH = cellH,
+        .facing = facing,
+        .fade = fade,
+        .clipBelowY = clipBelowY,
+    };
 
-            if (cell == '.') continue;
-
-            /* Shut eyes read as fur, not as holes. */
-            if (cell == 'E' && eyesOpen < 0.5f) cell = 'D';
-
-            float px = x + (float)col * cellW;
-            float py = y + (float)row * cellH;
-
-            /* Used for the waterline: nothing below the surface is drawn. */
-            if (clipBelowY > 0.0f && py > clipBelowY) continue;
-
-            Color c = CatArtColor(cell);
-
-            /* Float rect, NOT DrawRectangle with int casts: world units
-               here are fractional (1.5), so truncating put columns 1 or 2
-               units apart at random and sheared the sprite. */
-            DrawRectangleRec((Rectangle){ px, py, cellW, cellH }, Fade(c, fade));
-        }
-    }
+    SpriteDrawTopLeft(sprite, CatCell, &paint, x, y, style);
 }
 
 void CatArtDraw(float x, float y, float cellW, float cellH,

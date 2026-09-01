@@ -5,6 +5,7 @@
 #include "core/devtools.h"
 #include "core/settings.h"
 #include "core/input.h"
+#include "entity/agents.h"
 #include "entity/aquatic.h"
 #include "entity/cat.h"
 #include "entity/creatures.h"
@@ -78,10 +79,7 @@ static void RestartRun(void)
 
     VitalsReset();
     MushroomClearHarvests();
-    CreaturesReset();
-    RatsReset();
-    StalkersReset();
-    AquaticReset();
+    AgentsReset();
 
     sCamNow = CatPosition();
     sCamNow.y -= 24.0f;
@@ -249,9 +247,7 @@ static void FixedUpdate(float dt)
         AudioImpact(lost * 4.0f);
     }
     sLastHealth = gVitals.health;
-    RatsFixedUpdate(dt);
-    StalkersFixedUpdate(dt);
-    AquaticFixedUpdate(dt);
+    AgentsFixedUpdate(dt);
 
     /* Eating is the only way hunger goes back up. What any of it is worth
        is not written down anywhere the player can read - you find out by
@@ -505,9 +501,7 @@ static void Draw(void)
 
     BeginMode2D(sCam);
         TerrainDraw(topLeft.x, botRight.x, CatBounds());
-        AquaticDraw(AppRenderAlpha(), topLeft.x, botRight.x);
-        RatsDraw(AppRenderAlpha(), topLeft.x, botRight.x);
-        StalkersDraw(AppRenderAlpha(), topLeft.x, botRight.x);
+        AgentsDraw(AppRenderAlpha(), topLeft.x, botRight.x);
         CatDraw(AppRenderAlpha());
 
         /* Water last, so anything under it is tinted by it. */

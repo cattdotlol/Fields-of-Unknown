@@ -36,6 +36,7 @@ int main(void)
     SuiteAquatic();
     SuiteSpecies();
     SuiteCreatures();
+    SuiteAgents();
 
     printf("\n%s\n", sFailures ? "FAILED" : "all passed");
     return sFailures ? 1 : 0;
