@@ -3,8 +3,10 @@ SRCDIR := src
 BUILD  := build
 
 SRCS := $(shell find $(SRCDIR) -name '*.c')
-OBJS := $(SRCS:$(SRCDIR)/%.c=$(BUILD)/%.o)
-DEPS := $(OBJS:.o=.d)
+DEBUG_OBJS := $(SRCS:$(SRCDIR)/%.c=$(BUILD)/debug/%.o)
+ASAN_OBJS := $(SRCS:$(SRCDIR)/%.c=$(BUILD)/asan/%.o)
+RELEASE_OBJS := $(SRCS:$(SRCDIR)/%.c=$(BUILD)/release/%.o)
+DEPS := $(DEBUG_OBJS:.o=.d) $(ASAN_OBJS:.o=.d) $(RELEASE_OBJS:.o=.d)
 
 # Overridable so the compatibility build can link a static raylib built
 # against an older glibc. Defaults to whatever is installed locally.
@@ -29,30 +31,44 @@ endif
 CFLAGS := -std=c11 -Wall -Wextra -Wpedantic -I$(SRCDIR) -MMD -MP $(RAYLIB_CFLAGS)
 LDLIBS := $(RAYLIB_LIBS) $(SYS_LIBS)
 
-debug:   CFLAGS += -g -O0
-debug:   $(BUILD)/$(NAME)
+# Keep the historical build/game path for packaging and manual launches.
+# The real binaries and objects are isolated so switching modes is safe.
+debug: $(BUILD)/debug/$(NAME)
+	@cp $< $(BUILD)/$(NAME)
 
 # Needs the sanitizer runtimes: sudo dnf install libasan libubsan
-asan:    CFLAGS  += -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer
-asan:    LDFLAGS += -fsanitize=address,undefined
-asan:    $(BUILD)/$(NAME)
+asan: $(BUILD)/asan/$(NAME)
+	@cp $< $(BUILD)/$(NAME)
 
-release: CFLAGS  += -O2 -DNDEBUG
 # $ORIGIN/lib lets a bundled raylib win over the system one, so the
 # machine running this does not need raylib installed. Falls back to the
 # system copy when that directory is absent.
-release: LDFLAGS += $(RPATH_FLAG) $(STRIP_FLAG)
-release: $(BUILD)/$(NAME)
+release: $(BUILD)/release/$(NAME)
+	@cp $< $(BUILD)/$(NAME)
 
-$(BUILD)/$(NAME): $(OBJS)
+$(BUILD)/debug/$(NAME): $(DEBUG_OBJS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-$(BUILD)/%.o: $(SRCDIR)/%.c
+$(BUILD)/asan/$(NAME): $(ASAN_OBJS)
+	$(CC) $(LDFLAGS) -fsanitize=address,undefined -o $@ $^ $(LDLIBS)
+
+$(BUILD)/release/$(NAME): $(RELEASE_OBJS)
+	$(CC) $(LDFLAGS) $(RPATH_FLAG) $(STRIP_FLAG) -o $@ $^ $(LDLIBS)
+
+$(BUILD)/debug/%.o: $(SRCDIR)/%.c Makefile
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) -g -O0 -c -o $@ $<
+
+$(BUILD)/asan/%.o: $(SRCDIR)/%.c Makefile
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer -c -o $@ $<
+
+$(BUILD)/release/%.o: $(SRCDIR)/%.c Makefile
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -O2 -DNDEBUG -c -o $@ $<
 
 run: debug
-	./$(BUILD)/$(NAME)
+	./$(BUILD)/debug/$(NAME)
 
 # Everything but main.c, plus the test files.
 TEST_SRCS := $(filter-out $(SRCDIR)/main.c,$(SRCS)) $(wildcard tests/*.c)
@@ -119,11 +135,11 @@ DIST    := dist
 
 # A folder a friend can unzip and run. The game itself has no data files;
 # the only thing bundled is raylib.
-dist: clean release
+dist: release
 	@rm -rf $(DIST)/$(PKG) $(DIST)/$(PKG).zip
 	@mkdir -p $(DIST)/$(PKG)/lib
-	@cp $(BUILD)/$(NAME) $(DIST)/$(PKG)/
-	@cp -L "$$(ldd $(BUILD)/$(NAME) | awk '/libraylib/{print $$3}')" $(DIST)/$(PKG)/lib/
+	@cp $(BUILD)/release/$(NAME) $(DIST)/$(PKG)/
+	@cp -L "$$(ldd $(BUILD)/release/$(NAME) | awk '/libraylib/{print $$3}')" $(DIST)/$(PKG)/lib/
 	@cp -r assets $(DIST)/$(PKG)/
 	@printf '#!/bin/sh\ncd "$$(dirname "$$0")" || exit 1\nexec ./$(NAME) "$$@"\n' > $(DIST)/$(PKG)/run.sh
 	@chmod +x $(DIST)/$(PKG)/run.sh

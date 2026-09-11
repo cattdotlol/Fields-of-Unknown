@@ -33,6 +33,11 @@ bool InputDown(InputAction action);
 bool InputPressed(InputAction action);
 bool InputReleased(InputAction action);
 
+/* Latch a press until simulation consumes it, once. Clear on transitions
+   or while gameplay input is blocked so menu presses cannot leak in. */
+bool InputConsumePressed(InputAction action);
+void InputClearPending(void);
+
 /* -1, 0 or +1, keyboard or stick. */
 float InputAxisX(void);
 float InputAxisY(void);
@@ -48,6 +53,7 @@ const char *InputKeyName(int key);
 /* Confirm, cancel and the debug toggle stay put: rebinding the key that
    cancels a rebind is a good way to lock someone out of their own menu. */
 bool InputActionRebindable(InputAction action);
+bool InputKeyReserved(int key);
 
 /* Whichever action already uses this key, or ACT_COUNT if it is free. */
 InputAction InputActionUsing(int key, InputAction ignore);

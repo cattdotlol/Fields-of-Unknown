@@ -11,16 +11,29 @@ static RenderTexture2D sMap;
 static bool  sReady;
 static int   sWidth;
 static int   sHeight;
+static bool  sFrameReady;
 
 void LightingLoad(void)
 {
-    sWidth = GetScreenWidth();
-    sHeight = GetScreenHeight();
+    int width = GetScreenWidth();
+    int height = GetScreenHeight();
+    if (width <= 0 || height <= 0) return;
 
-    sMap = LoadRenderTexture(sWidth, sHeight);
-    sReady = (sMap.texture.id != 0);
+    /* Allocate before releasing the old map: a failed resize must not
+       discard the last usable GPU resource. */
+    RenderTexture2D replacement = LoadRenderTexture(width, height);
+    if (replacement.id == 0 || replacement.texture.id == 0)
+    {
+        if (replacement.id != 0) UnloadRenderTexture(replacement);
+        return;
+    }
 
-    if (sReady) SetTextureFilter(sMap.texture, TEXTURE_FILTER_BILINEAR);
+    LightingUnload();
+    sMap = replacement;
+    sWidth = width;
+    sHeight = height;
+    sReady = true;
+    SetTextureFilter(sMap.texture, TEXTURE_FILTER_BILINEAR);
 }
 
 void LightingUnload(void)
@@ -29,6 +42,7 @@ void LightingUnload(void)
 
     UnloadRenderTexture(sMap);
     sReady = false;
+    sFrameReady = false;
 }
 
 /* The window can be resized at any time; the lightmap has to follow. */
@@ -36,14 +50,16 @@ static void EnsureSize(void)
 {
     if (sReady && sWidth == GetScreenWidth() && sHeight == GetScreenHeight()) return;
 
-    LightingUnload();
     LightingLoad();
 }
 
 void LightingBegin(float ambient)
 {
+    sFrameReady = false;
+    if (GetScreenWidth() <= 0 || GetScreenHeight() <= 0) return;
     EnsureSize();
-    if (!sReady) return;
+    if (!sReady || sWidth != GetScreenWidth() || sHeight != GetScreenHeight()) return;
+    sFrameReady = true;
 
     if (ambient < 0.0f) ambient = 0.0f;
     if (ambient > 1.0f) ambient = 1.0f;
@@ -124,7 +140,7 @@ static void CastShadow(Vector2 light, Rectangle solid)
 void LightingAddLight(Camera2D camera, Vector2 world, float radius,
                       Color colour, float intensity)
 {
-    if (!sReady || intensity <= 0.0f) return;
+    if (!sFrameReady || radius <= 0.0f || camera.zoom <= 0.0f || intensity <= 0.0f) return;
 
     Vector2 screen = GetWorldToScreen2D(world, camera);
     float screenRadius = radius * camera.zoom;
@@ -172,7 +188,7 @@ void LightingAddLight(Camera2D camera, Vector2 world, float radius,
 
 void LightingEnd(void)
 {
-    if (!sReady) return;
+    if (!sFrameReady) return;
 
     /* Multiply: the lightmap dims the scene rather than painting over it. */
     BeginBlendMode(BLEND_MULTIPLIED);
@@ -181,4 +197,5 @@ void LightingEnd(void)
                        (Rectangle){ 0.0f, 0.0f, (float)sWidth, (float)sHeight },
                        (Vector2){ 0.0f, 0.0f }, 0.0f, WHITE);
     EndBlendMode();
+    sFrameReady = false;
 }

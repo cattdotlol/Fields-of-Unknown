@@ -25,6 +25,12 @@ static void TestDefaults(void)
     Check("confirm is not rebindable", InputActionRebindable(ACT_CONFIRM), false);
     Check("cancel is not rebindable", InputActionRebindable(ACT_CANCEL), false);
     Check("jumping is rebindable", InputActionRebindable(ACT_JUMP), true);
+    Check("escape is reserved", InputKeyReserved(KEY_ESCAPE), true);
+#if !defined(NDEBUG)
+    Check("debug reroll cannot be rebound", InputKeyReserved(KEY_F5), true);
+#else
+    Check("release has no reserved reroll key", InputKeyReserved(KEY_F5), false);
+#endif
 }
 
 /* Every action needs a label, or the controls screen shows a neighbour's
@@ -135,6 +141,36 @@ static void TestSomethingOtherThanAKeyboardCanDriveIt(void)
     Check("with nothing left held", InputDown(ACT_RIGHT), false);
 }
 
+static void TestSimulationPresses(void)
+{
+    InputScriptBegin();
+    InputScriptHold(ACT_JUMP, true);
+    InputScriptHold(ACT_EAT, true);
+    InputPoll();
+    /* A render frame without a tick, followed by a release. */
+    InputScriptRelease();
+    InputPoll();
+    Check("jump survives a frame without simulation",
+          InputConsumePressed(ACT_JUMP), true);
+    Check("eat survives a frame without simulation",
+          InputConsumePressed(ACT_EAT), true);
+    Check("catch-up ticks do not repeat jump", InputConsumePressed(ACT_JUMP), false);
+    Check("catch-up ticks do not repeat eat", InputConsumePressed(ACT_EAT), false);
+
+    InputScriptHold(ACT_EAT, true);
+    InputPoll();
+    Check("a new press can be consumed", InputConsumePressed(ACT_EAT), true);
+    InputPoll();
+    Check("holding does not queue another press", InputConsumePressed(ACT_EAT), false);
+
+    InputScriptHold(ACT_JUMP, true);
+    InputPoll();
+    InputClearPending();
+    Check("transitions discard pending gameplay input",
+          InputConsumePressed(ACT_JUMP), false);
+    InputScriptEnd();
+}
+
 void SuiteInput(void)
 {
     TestDefaults();
@@ -143,4 +179,5 @@ void SuiteInput(void)
     TestConflictDetection();
     TestBindingsSurviveASave();
     TestSomethingOtherThanAKeyboardCanDriveIt();
+    TestSimulationPresses();
 }

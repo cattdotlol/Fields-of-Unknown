@@ -169,9 +169,20 @@ static void TestEatingRemovesItFromTheWorld(void)
           CreaturesConsume(rat), false);
 
     CreaturesOnRemove(SPECIES_RAT, CountRemoval);
+    /* Gameplay republishes animals before the cat eats. */
+    CreaturesPublish(SPECIES_RAT, (Vector2){ 5.0f, 0.0f }, 3, 30.0f, 0.0f);
 
     Check("once the owner is listening, it can", CreaturesConsume(rat), true);
     Check("and the owner is the one told", sRemoved == 1, true);
+    Check("the same pointer cannot be eaten twice", CreaturesConsume(rat), false);
+    Check("consumed prey disappears immediately",
+          CreaturesCatchable(SPECIES_CAT, (Vector2){ 0.0f, 0.0f }) == NULL, true);
+    Check("consumed animals leave the count", CreaturesCount() == 0, true);
+    Check("consumed animals leave indexed queries", CreatureAt(0) == NULL, true);
+    CreaturesBeginTick();
+    Check("republished prey stays gone next tick",
+          CreaturesNearestPrey(SPECIES_CAT, (Vector2){ 0.0f, 0.0f }, 100.0f) == NULL, true);
+    Check("removal was called only once", sRemoved == 1, true);
 }
 
 /* The whole path, driven the way the gameplay screen drives it. */

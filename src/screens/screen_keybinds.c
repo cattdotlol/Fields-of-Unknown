@@ -80,6 +80,7 @@ static void Update(float dt)
         int key = GetKeyPressed();
 
         if (key == KEY_ESCAPE) { sCapturing = false; return; }
+        if (InputKeyReserved(key)) return;
 
         if (key != 0)
         {

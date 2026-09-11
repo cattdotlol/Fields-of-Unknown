@@ -36,6 +36,8 @@ have CI build it.
 
 All rebindable in Settings → Controls.
 
+On a controller, the right face button sneaks or dives; Start opens the menu.
+
 ## Licence
 
 Haven't picked one yet.

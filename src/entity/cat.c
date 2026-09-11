@@ -161,7 +161,7 @@ void CatFixedUpdate(float dt)
 
     sCat.submerged = (head.y > waterY) && !TerrainAirAt(head);
 
-    if (InputPressed(ACT_JUMP)) sCat.buffer = JUMP_BUFFER;
+    if (InputConsumePressed(ACT_JUMP)) sCat.buffer = JUMP_BUFFER;
     if (sCat.buffer > 0.0f) sCat.buffer -= dt;
     if (sCat.coyote > 0.0f) sCat.coyote -= dt;
 

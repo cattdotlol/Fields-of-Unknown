@@ -48,6 +48,7 @@ typedef struct Creature {
        swimming hard is a predator, and the fish are gone before it
        arrives. Prey reads this, so how you move is the whole game. */
     float   noise;
+    bool    consumed;  /* tombstone: keeps borrowed pointers stable this tick */
 } Creature;
 
 void CreaturesReset(void);
@@ -84,7 +85,8 @@ typedef void (*CreatureRemove)(int tag);
 void CreaturesOnRemove(Species s, CreatureRemove fn);
 
 /* Eats it: applies nothing itself, only removes it from the world.
-   Returns false when nobody is listening for that species. */
+   Returns false if already consumed or nobody is listening for that species.
+   Consumption immediately hides the animal in both census buffers. */
 bool CreaturesConsume(const Creature *c);
 
 #endif /* ENTITY_CREATURES_H */

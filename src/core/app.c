@@ -4,6 +4,7 @@
 #include "core/input.h"
 #include "core/settings.h"
 #include "core/sysinfo.h"
+#include "core/timestep.h"
 #include "gfx/filmfx.h"
 #include "gfx/lighting.h"
 #include "gfx/scene_flood.h"
@@ -17,11 +18,7 @@
 
 #define FADE_SPEED 3.2f
 
-/* The simulation runs at a fixed rate no matter what the display does. */
-#define TICK_HZ      60
-#define TICK_DT      (1.0f / (float)TICK_HZ)
-#define MAX_CATCHUP  5      /* ticks per frame before we drop the backlog */
-#define MAX_FRAME    0.25f  /* clamp, so a stall cannot spiral */
+#define TICK_DT ((float)SIM_TICK_DT)
 
 /* Registry index must match the ScreenId enum order. */
 static const Screen *sScreens[SCREEN_COUNT];
@@ -31,11 +28,11 @@ static ScreenId sPending = SCREEN_NONE;
 static float    sFade;          /* 0 = clear, 1 = black */
 static int      sFadeDir;       /* +1 out, -1 in, 0 idle */
 static bool     sQuit;
-static float    sAccumulator;
-static float    sAlpha;
+static TimeStep sClock;
 
 static void EnterScreen(ScreenId id)
 {
+    InputClearPending();
     if (sCurrent != SCREEN_NONE && sScreens[sCurrent]->unload) sScreens[sCurrent]->unload();
 
     sCurrent = id;
@@ -45,6 +42,7 @@ static void EnterScreen(ScreenId id)
 
 void AppGoTo(ScreenId id)
 {
+    if (id < 0 || id >= SCREEN_COUNT) return;
     if (sFadeDir != 0 || id == sCurrent) return;
 
     sPending = id;
@@ -58,11 +56,16 @@ void AppQuit(void)
 
 float AppRenderAlpha(void)
 {
-    return sAlpha;
+    return sClock.alpha;
 }
 
 void AppInit(void)
 {
+    sClock = (TimeStep){0};
+    sQuit = false;
+    sFade = 0.0f;
+    sFadeDir = 0;
+    sPending = SCREEN_NONE;
     /* No MSAA: smoothed edges would undo the pixel-sharp look. */
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_VSYNC_HINT | FLAG_WINDOW_MAXIMIZED);
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, GAME_TITLE);
@@ -108,15 +111,14 @@ void AppRun(void)
     while (!WindowShouldClose() && !sQuit)
     {
         float frame = GetFrameTime();
-        if (frame > MAX_FRAME) frame = MAX_FRAME;
+        int ticks = TimeStepAdvance(&sClock, frame);
+        if (frame > SIM_MAX_FRAME) frame = (float)SIM_MAX_FRAME;
 
         InputPoll();
+        if (sFadeDir != 0 || sCurrent != SCREEN_GAMEPLAY) InputClearPending();
 
         /* --- fixed-rate simulation ------------------------------------ */
-        sAccumulator += frame;
-
-        int ticks = 0;
-        while (sAccumulator >= TICK_DT && ticks < MAX_CATCHUP)
+        for (int tick = 0; tick < ticks; tick++)
         {
             SeasonUpdate(TICK_DT);
             WeatherUpdate(TICK_DT);
@@ -127,15 +129,7 @@ void AppRun(void)
             {
                 sScreens[sCurrent]->fixedUpdate(TICK_DT);
             }
-
-            sAccumulator -= TICK_DT;
-            ticks++;
         }
-
-        /* Too far behind to catch up: drop the debt rather than stack it. */
-        if (ticks >= MAX_CATCHUP) sAccumulator = 0.0f;
-
-        sAlpha = sAccumulator / TICK_DT;
 
         /* --- per-frame ------------------------------------------------- */
         if (sFadeDir > 0)
@@ -195,6 +189,7 @@ void AppRun(void)
 void AppShutdown(void)
 {
     if (sCurrent != SCREEN_NONE && sScreens[sCurrent]->unload) sScreens[sCurrent]->unload();
+    sCurrent = SCREEN_NONE;
 
     SettingsSave(SETTINGS_FILE);
 

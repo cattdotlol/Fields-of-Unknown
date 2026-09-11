@@ -20,5 +20,6 @@ void SuiteAquatic(void);
 void SuiteSpecies(void);
 void SuiteCreatures(void);
 void SuiteAgents(void);
+void SuiteTimeStep(void);
 
 #endif /* TESTS_H */

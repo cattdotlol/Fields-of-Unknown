@@ -32,16 +32,36 @@ void BodyApplyGravity(Body *b, float gravity, float maxFall, float dt)
     if (b->vel.y > maxFall) b->vel.y = maxFall;
 }
 
-static void MoveX(Body *b, float dt)
+static void MoveX(Body *b, float dt, int count, BodySolidAt solidAt)
 {
+    Rectangle start = BodyRect(b);
+    float movement = b->vel.x * dt;
     b->pos.x += b->vel.x * dt;
 
     Rectangle box = BodyRect(b);
     float half = b->width * 0.5f;
 
-    for (int i = 0; i < TerrainCount(); i++)
+    for (int i = 0; i < count; i++)
     {
-        Rectangle s = TerrainSolid(i);
+        Rectangle s = solidAt(i);
+        if (start.y >= s.y + s.height || start.y + start.height <= s.y) continue;
+        /* Test crossed faces, even if the destination is beyond the wall. */
+        if (movement > 0.0f && start.x + start.width <= s.x &&
+            box.x + box.width >= s.x)
+        {
+            b->pos.x = s.x - half;
+            b->vel.x = 0.0f;
+            box = BodyRect(b);
+            continue;
+        }
+        if (movement < 0.0f && start.x >= s.x + s.width &&
+            box.x <= s.x + s.width)
+        {
+            b->pos.x = s.x + s.width + half;
+            b->vel.x = 0.0f;
+            box = BodyRect(b);
+            continue;
+        }
         if (!CheckCollisionRecs(box, s)) continue;
 
         /* Push out of the NEAREST edge, not the one the velocity implies.
@@ -63,16 +83,36 @@ static void MoveX(Body *b, float dt)
     /* No clamp: the world has no edges to run into. */
 }
 
-static void MoveY(Body *b, float dt)
+static void MoveY(Body *b, float dt, int count, BodySolidAt solidAt)
 {
+    Rectangle start = BodyRect(b);
+    float movement = b->vel.y * dt;
     b->pos.y += b->vel.y * dt;
     b->grounded = false;
 
     Rectangle box = BodyRect(b);
 
-    for (int i = 0; i < TerrainCount(); i++)
+    for (int i = 0; i < count; i++)
     {
-        Rectangle s = TerrainSolid(i);
+        Rectangle s = solidAt(i);
+        if (start.x >= s.x + s.width || start.x + start.width <= s.x) continue;
+        if (movement >= 0.0f && start.y + start.height <= s.y &&
+            box.y + box.height >= s.y)
+        {
+            b->pos.y = s.y;
+            b->vel.y = 0.0f;
+            b->grounded = true;
+            box = BodyRect(b);
+            continue;
+        }
+        if (movement < 0.0f && start.y >= s.y + s.height &&
+            box.y <= s.y + s.height)
+        {
+            b->pos.y = s.y + s.height + b->height;
+            b->vel.y = 0.0f;
+            box = BodyRect(b);
+            continue;
+        }
         if (!CheckCollisionRecs(box, s)) continue;
 
         /* Same rule vertically: nearest face wins, so a body overlapping
@@ -97,8 +137,13 @@ static void MoveY(Body *b, float dt)
 
 void BodyMove(Body *b, float dt)
 {
-    MoveX(b, dt);
-    MoveY(b, dt);
+    BodyMoveWithSolids(b, dt, TerrainCount(), TerrainSolid);
+}
+
+void BodyMoveWithSolids(Body *b, float dt, int count, BodySolidAt solidAt)
+{
+    MoveX(b, dt, count, solidAt);
+    MoveY(b, dt, count, solidAt);
 }
 
 Vector2 BodyRenderPos(const Body *b, float alpha)

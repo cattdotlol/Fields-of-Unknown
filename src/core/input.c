@@ -14,6 +14,7 @@ static int  sPads[ACT_COUNT];      /* one gamepad button per action, -1 for none
 
 static bool sDown[ACT_COUNT];
 static bool sPrev[ACT_COUNT];
+static bool sPending[ACT_COUNT];
 
 /* Set by a script rather than by a device. See the note in the header. */
 static bool sScripted;
@@ -32,6 +33,7 @@ void InputResetDefaults(void)
     memset(sKeys, 0, sizeof(sKeys));
     memset(sDown, 0, sizeof(sDown));
     memset(sPrev, 0, sizeof(sPrev));
+    InputClearPending();
 
     Bind3(ACT_LEFT,    KEY_A, KEY_LEFT,  0, GAMEPAD_BUTTON_LEFT_FACE_LEFT);
     Bind3(ACT_RIGHT,   KEY_D, KEY_RIGHT, 0, GAMEPAD_BUTTON_LEFT_FACE_RIGHT);
@@ -45,7 +47,7 @@ void InputResetDefaults(void)
     Bind3(ACT_EAT,     KEY_E, KEY_F, 0, GAMEPAD_BUTTON_RIGHT_FACE_LEFT);
 
     Bind3(ACT_CONFIRM, KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, GAMEPAD_BUTTON_RIGHT_FACE_DOWN);
-    Bind3(ACT_CANCEL,  KEY_ESCAPE, 0, 0, GAMEPAD_BUTTON_RIGHT_FACE_RIGHT);
+    Bind3(ACT_CANCEL,  KEY_ESCAPE, 0, 0, GAMEPAD_BUTTON_MIDDLE_RIGHT);
     Bind3(ACT_DEBUG,   KEY_F1, 0, 0, -1);
 }
 
@@ -84,6 +86,15 @@ const char *InputActionName(InputAction action)
 bool InputActionRebindable(InputAction action)
 {
     return (action != ACT_CONFIRM && action != ACT_CANCEL && action != ACT_DEBUG);
+}
+
+bool InputKeyReserved(int key)
+{
+    if (key == KEY_ESCAPE) return true;
+#if !defined(NDEBUG)
+    if (key == KEY_GRAVE || key == KEY_F1 || key == KEY_F5) return true;
+#endif
+    return false;
 }
 
 InputAction InputActionUsing(int key, InputAction ignore)
@@ -189,21 +200,27 @@ void InputPoll(void)
            them from, and a replay must not be perturbed by whoever is
            watching it. */
         memcpy(sDown, sHeld, sizeof(sDown));
-        return;
+    }
+    else
+    {
+        for (int a = 0; a < ACT_COUNT; a++) sDown[a] = RawDown((InputAction)a);
+
+        /* Stick counts as a direction hold. */
+        if (IsGamepadAvailable(GAMEPAD))
+        {
+            float ax = GetGamepadAxisMovement(GAMEPAD, GAMEPAD_AXIS_LEFT_X);
+            float ay = GetGamepadAxisMovement(GAMEPAD, GAMEPAD_AXIS_LEFT_Y);
+
+            if (ax < -STICK_DEADZONE) sDown[ACT_LEFT] = true;
+            if (ax >  STICK_DEADZONE) sDown[ACT_RIGHT] = true;
+            if (ay < -STICK_DEADZONE) sDown[ACT_UP] = true;
+            if (ay >  STICK_DEADZONE) sDown[ACT_DOWN] = true;
+        }
     }
 
-    for (int a = 0; a < ACT_COUNT; a++) sDown[a] = RawDown((InputAction)a);
-
-    /* Stick counts as a direction hold. */
-    if (IsGamepadAvailable(GAMEPAD))
+    for (int a = 0; a < ACT_COUNT; a++)
     {
-        float ax = GetGamepadAxisMovement(GAMEPAD, GAMEPAD_AXIS_LEFT_X);
-        float ay = GetGamepadAxisMovement(GAMEPAD, GAMEPAD_AXIS_LEFT_Y);
-
-        if (ax < -STICK_DEADZONE) sDown[ACT_LEFT] = true;
-        if (ax >  STICK_DEADZONE) sDown[ACT_RIGHT] = true;
-        if (ay < -STICK_DEADZONE) sDown[ACT_UP] = true;
-        if (ay >  STICK_DEADZONE) sDown[ACT_DOWN] = true;
+        if (sDown[a] && !sPrev[a]) sPending[a] = true;
     }
 }
 
@@ -212,9 +229,7 @@ bool InputDown(InputAction action)
     return sDown[action];
 }
 
-/* NOTE: edges are frame-scoped, so a frame that runs two fixed ticks
-   shows the same press to both. Anything reacting to a press inside the
-   fixed step must be idempotent - see the cat's jump buffer. */
+/* Menus use frame edges; simulation uses InputConsumePressed. */
 bool InputPressed(InputAction action)
 {
     return sDown[action] && !sPrev[action];
@@ -223,6 +238,18 @@ bool InputPressed(InputAction action)
 bool InputReleased(InputAction action)
 {
     return !sDown[action] && sPrev[action];
+}
+
+bool InputConsumePressed(InputAction action)
+{
+    bool pressed = sPending[action];
+    sPending[action] = false;
+    return pressed;
+}
+
+void InputClearPending(void)
+{
+    memset(sPending, 0, sizeof(sPending));
 }
 
 float InputAxisX(void)
@@ -264,6 +291,7 @@ int InputBinding(InputAction action, int slot)
 void InputScriptBegin(void)
 {
     sScripted = true;
+    InputClearPending();
 
     memset(sHeld, 0, sizeof(sHeld));
     memset(sDown, 0, sizeof(sDown));
@@ -273,6 +301,7 @@ void InputScriptBegin(void)
 void InputScriptEnd(void)
 {
     sScripted = false;
+    InputClearPending();
 
     memset(sHeld, 0, sizeof(sHeld));
     memset(sDown, 0, sizeof(sDown));

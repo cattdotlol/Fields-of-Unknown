@@ -14,6 +14,9 @@
 #include <math.h>
 #include <stdio.h>
 
+static Rectangle sObstacles[2];
+static Rectangle ObstacleAt(int index) { return sObstacles[index]; }
+
 /* A single wide slab, so "which edge did it leave by" is unambiguous. */
 static void OneWideSlab(void)
 {
@@ -42,9 +45,9 @@ static void TestNearestEdgeWins(void)
 
     Check("the right edge really is nearer", pushRight < pushLeft, true);
 
-    /* The rule the fix implements. */
-    float resolved = (pushLeft < pushRight) ? (slab.x - 11.0f)
-                                            : (slab.x + slab.width + 11.0f);
+    sObstacles[0] = slab;
+    BodyMoveWithSolids(&b, 1.0f / 60.0f, 1, ObstacleAt);
+    float resolved = b.pos.x;
 
     printf("    resolves to x=%.0f\n", (double)resolved);
 
@@ -92,8 +95,41 @@ static void TestNoLargeShovesInPlay(void)
     Check("nothing is thrown backwards across a solid", worst < 20.0f, true);
 }
 
+static void TestSweptMovement(void)
+{
+    Body b;
+    sObstacles[0] = (Rectangle){ 50.0f, -100.0f, 2.0f, 200.0f };
+    BodyInit(&b, (Vector2){ 0.0f, 0.0f }, 10.0f, 10.0f);
+    b.vel.x = 10000.0f;
+    BodyMoveWithSolids(&b, 1.0f / 60.0f, 1, ObstacleAt);
+    Check("fast body stops at thin wall", fabsf(b.pos.x - 45.0f) < 0.001f, true);
+    Check("wall contact clears horizontal velocity", b.vel.x == 0.0f, true);
+
+    BodyInit(&b, (Vector2){ 100.0f, 0.0f }, 10.0f, 10.0f);
+    b.vel.x = -10000.0f;
+    BodyMoveWithSolids(&b, 1.0f / 60.0f, 1, ObstacleAt);
+    Check("sweep also stops leftward movement", fabsf(b.pos.x - 57.0f) < 0.001f, true);
+
+    sObstacles[0] = (Rectangle){ -100.0f, 100.0f, 200.0f, 2.0f };
+    sObstacles[1] = (Rectangle){ -100.0f, 50.0f, 200.0f, 2.0f };
+    BodyInit(&b, (Vector2){ 0.0f, 0.0f }, 10.0f, 10.0f);
+    b.vel.y = 10000.0f;
+    BodyMoveWithSolids(&b, 1.0f / 60.0f, 2, ObstacleAt);
+    Check("nearest floor wins regardless of list order", fabsf(b.pos.y - 50.0f) < 0.001f, true);
+    Check("fast landing is grounded", b.grounded, true);
+    BodyMoveWithSolids(&b, 1.0f / 60.0f, 2, ObstacleAt);
+    Check("resting contact stays grounded without gravity", b.grounded, true);
+
+    BodyInit(&b, (Vector2){ 0.0f, 80.0f }, 10.0f, 10.0f);
+    b.vel.y = -10000.0f;
+    BodyMoveWithSolids(&b, 1.0f / 60.0f, 2, ObstacleAt);
+    Check("fast rise stops below ceiling", fabsf(b.pos.y - 62.0f) < 0.001f, true);
+    Check("ceiling contact does not ground body", b.grounded, false);
+}
+
 void SuitePhysics(void)
 {
     TestNearestEdgeWins();
     TestNoLargeShovesInPlay();
+    TestSweptMovement();
 }

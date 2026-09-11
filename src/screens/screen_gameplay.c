@@ -70,6 +70,7 @@ static float AmbientTarget(void);
 
 static void RestartRun(void)
 {
+    InputClearPending();
     /* Every run starts at first light on day one, however long the player
        sat on the title screen. */
     DaylightInit();
@@ -183,13 +184,18 @@ static float AmbientTarget(void)
 
 static void FixedUpdate(float dt)
 {
-    if (DevFrozen()) return;
+    if (DevFrozen() || DevToolsOpen())
+    {
+        InputClearPending();
+        return;
+    }
 
     /* --- dying ---------------------------------------------------------
        The world holds still while it fades, so the death reads as an
        event rather than a glitch. */
     if (gVitals.dead)
     {
+        InputClearPending();
         sDeath += dt / DEATH_FADE_OUT;
 
         if (sDeath >= 1.0f)
@@ -253,7 +259,7 @@ static void FixedUpdate(float dt)
        is not written down anywhere the player can read - you find out by
        trying it, and a jellyfish is allowed to teach you that lesson the
        expensive way. */
-    if (InputPressed(ACT_EAT))
+    if (InputConsumePressed(ACT_EAT))
     {
         Rectangle box = CatBounds();
         Vector2 mouth = { box.x + box.width * 0.5f,
@@ -268,8 +274,8 @@ static void FixedUpdate(float dt)
         {
             Nutrition n = SpeciesOf(caught->species)->food;
 
-            CreaturesConsume(caught);
-            VitalsApply(n.hunger, n.health, n.warmth);
+            if (CreaturesConsume(caught))
+                VitalsApply(n.hunger, n.health, n.warmth);
         }
         else
         {
@@ -292,6 +298,7 @@ static void Update(float dt)
        the cat and browse the menu at the same time. */
     if (DevToolsUpdate(dt)) return;
 
+#if !defined(NDEBUG)
     if (InputPressed(ACT_DEBUG)) sDebug = !sDebug;
 
     /* Dev: reroll the sprawl to eyeball generation variety. */
@@ -300,6 +307,7 @@ static void Update(float dt)
         WorldSetSeed((unsigned int)GetTime() ^ (WorldSeed() * 2654435761u));
         RestartRun();
     }
+#endif
     if (InputPressed(ACT_CANCEL)) AppGoTo(SCREEN_TITLE);
 }
 

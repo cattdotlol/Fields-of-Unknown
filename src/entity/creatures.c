@@ -1,6 +1,5 @@
 #include "entity/creatures.h"
 
-#include <math.h>
 #include <stddef.h>
 
 /* Two buffers: one being written this tick, one being read. See the
@@ -48,7 +47,10 @@ void CreaturesPublish(Species s, Vector2 pos, int tag,
 
 int CreaturesCount(void)
 {
-    return sCount[READ];
+    int n = 0;
+    for (int i = 0; i < sCount[READ]; i++)
+        if (!sBuf[READ][i].consumed) n++;
+    return n;
 }
 
 int CreaturesCountOf(Species s)
@@ -57,7 +59,7 @@ int CreaturesCountOf(Species s)
 
     for (int i = 0; i < sCount[READ]; i++)
     {
-        if (sBuf[READ][i].species == s) n++;
+        if (!sBuf[READ][i].consumed && sBuf[READ][i].species == s) n++;
     }
 
     return n;
@@ -65,21 +67,26 @@ int CreaturesCountOf(Species s)
 
 const Creature *CreatureAt(int index)
 {
-    if (index < 0 || index >= sCount[READ]) return NULL;
-
-    return &sBuf[READ][index];
+    if (index < 0) return NULL;
+    for (int i = 0; i < sCount[READ]; i++)
+    {
+        if (sBuf[READ][i].consumed) continue;
+        if (index-- == 0) return &sBuf[READ][i];
+    }
+    return NULL;
 }
 
-static float Distance(Vector2 a, Vector2 b)
+static float DistanceSquared(Vector2 a, Vector2 b)
 {
     float dx = a.x - b.x;
     float dy = a.y - b.y;
 
-    return sqrtf(dx * dx + dy * dy);
+    return dx * dx + dy * dy;
 }
 
 const Creature *CreaturesNearest(unsigned int mask, Vector2 from, float range)
 {
+    if (range < 0.0f) return NULL;
     const Creature *best = NULL;
     float bestDistance = 0.0f;
 
@@ -87,11 +94,12 @@ const Creature *CreaturesNearest(unsigned int mask, Vector2 from, float range)
     {
         const Creature *c = &sBuf[READ][i];
 
+        if (c->consumed) continue;
         if (!(mask & SPECIES_BIT(c->species))) continue;
 
-        float d = Distance(c->pos, from);
+        float d = DistanceSquared(c->pos, from);
 
-        if (d > range) continue;
+        if (d > range * range) continue;
         if (best && d >= bestDistance) continue;
 
         best = c;
@@ -122,12 +130,13 @@ const Creature *CreaturesCatchable(Species hunter, Vector2 from)
     {
         const Creature *c = &sBuf[READ][i];
 
+        if (c->consumed) continue;
         if (!(menu & SPECIES_BIT(c->species))) continue;
         if (c->reach <= 0.0f) continue;
 
-        float d = Distance(c->pos, from);
+        float d = DistanceSquared(c->pos, from);
 
-        if (d > c->reach) continue;
+        if (d > c->reach * c->reach) continue;
         if (best && d >= bestDistance) continue;
 
         best = c;
@@ -146,10 +155,20 @@ void CreaturesOnRemove(Species s, CreatureRemove fn)
 
 bool CreaturesConsume(const Creature *c)
 {
-    if (!c) return false;
+    if (!c || c->consumed) return false;
     if (c->species < 0 || c->species >= SPECIES_COUNT) return false;
     if (!sRemove[c->species]) return false;
 
+    /* Do not compact: callers may still hold a pointer into the census. */
+    for (int b = 0; b < 2; b++)
+    {
+        for (int i = 0; i < sCount[b]; i++)
+        {
+            Creature *entry = &sBuf[b][i];
+            if (entry->species == c->species && entry->tag == c->tag)
+                entry->consumed = true;
+        }
+    }
     sRemove[c->species](c->tag);
 
     return true;

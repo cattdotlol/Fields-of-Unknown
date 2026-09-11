@@ -32,6 +32,11 @@ void BodyApplyGravity(Body *b, float gravity, float maxFall, float dt);
    sets `grounded` when it lands. */
 void BodyMove(Body *b, float dt);
 
+/* Same solver against an explicit collision source, for isolated worlds
+   and headless tests. Sweeps each axis to stop at the first crossed face. */
+typedef Rectangle (*BodySolidAt)(int index);
+void BodyMoveWithSolids(Body *b, float dt, int count, BodySolidAt solidAt);
+
 /* Where to draw it this frame: alpha is the leftover fraction of a tick. */
 Vector2 BodyRenderPos(const Body *b, float alpha);
 

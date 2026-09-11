@@ -25,7 +25,7 @@ typedef struct Screen {
 
     /* Fixed 60Hz: simulation only. dt is always TICK_DT, so physics is
        deterministic and frame-rate independent. May run 0..N times per
-       frame, so treat input edges as idempotent here. */
+       frame; consume discrete actions with InputConsumePressed. */
     void (*fixedUpdate)(float dt);
 
     void (*draw)(void);

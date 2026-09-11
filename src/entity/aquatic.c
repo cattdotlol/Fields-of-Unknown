@@ -616,10 +616,9 @@ static void UpdateOne(Aquatic *a, float dt, Vector2 cat, bool catSwimming)
                     /* And takes one. A shark thinning out a school is
                        the only place in the game the food chain is
                        visible with the cat nowhere in it. */
-                    if (qd < SHARK_SNAP && a->cooldown <= 0.0f)
+                    if (qd < SHARK_SNAP && a->cooldown <= 0.0f &&
+                        CreaturesConsume(quarry))
                     {
-                        CreaturesConsume(quarry);
-
                         a->cooldown = 1.4f;
                         a->sated = RandRange(SHARK_FULL * 0.7f,
                                              SHARK_FULL * 1.3f);
