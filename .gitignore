@@ -2,3 +2,5 @@ build/
 dist/
 vendor/
 settings.cfg
+compile_commands.json
+__pycache__/

@@ -28,7 +28,7 @@ else
   STRIP_FLAG := -s
 endif
 
-CFLAGS := -std=c11 -Wall -Wextra -Wpedantic -I$(SRCDIR) -MMD -MP $(RAYLIB_CFLAGS)
+CFLAGS := -std=c11 -Wall -Wextra -Wpedantic -I$(SRCDIR) -MMD -MP $(RAYLIB_CFLAGS) $(EXTRA_CFLAGS)
 LDLIBS := $(RAYLIB_LIBS) $(SYS_LIBS)
 
 # Keep the historical build/game path for packaging and manual launches.
@@ -73,10 +73,31 @@ run: debug
 # Everything but main.c, plus the test files.
 TEST_SRCS := $(filter-out $(SRCDIR)/main.c,$(SRCS)) $(wildcard tests/*.c)
 
+TEST_SUITE ?=
+
 test:
 	@mkdir -p $(BUILD)/tests
 	$(CC) $(CFLAGS) -g -O0 -o $(BUILD)/tests/run $(TEST_SRCS) $(LDLIBS)
-	@./$(BUILD)/tests/run
+	@./$(BUILD)/tests/run $(TEST_SUITE)
+
+test-release:
+	@mkdir -p $(BUILD)/tests
+	$(CC) $(CFLAGS) -O2 -DNDEBUG -o $(BUILD)/tests/run-release $(TEST_SRCS) $(LDLIBS)
+	@./$(BUILD)/tests/run-release $(TEST_SUITE)
+
+test-asan:
+	@mkdir -p $(BUILD)/tests
+	$(CC) $(CFLAGS) -g -O0 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -o $(BUILD)/tests/run-asan $(TEST_SRCS) $(LDLIBS)
+	@./$(BUILD)/tests/run-asan $(TEST_SUITE)
+
+doctor:
+	python3 tools/dev.py doctor
+
+check:
+	python3 tools/dev.py check
+
+compdb:
+	python3 tools/dev.py compdb
 
 VERSION ?= 0.1.0
 
@@ -155,11 +176,11 @@ dist: release
 dist-src:
 	@rm -rf $(DIST)/$(SRCPKG) $(DIST)/$(SRCPKG).zip
 	@mkdir -p $(DIST)/$(SRCPKG)
-	@cp -r src tests assets Makefile README.md $(DIST)/$(SRCPKG)/
+	@cp -r src tests assets tools docs AGENTS.md Makefile README.md $(DIST)/$(SRCPKG)/
 	@cd $(DIST) && zip -qr $(SRCPKG).zip $(SRCPKG)
 	@echo
 	@echo "  $(DIST)/$(SRCPKG).zip  ($$(du -h $(DIST)/$(SRCPKG).zip | cut -f1))"
-	@echo "  they unzip it and run ./packaging/build.sh"
+	@echo "  they unzip it and run make"
 	@echo
 
 clean:
@@ -167,7 +188,7 @@ clean:
 
 -include $(DEPS)
 
-.PHONY: debug asan release run test dist dist-src windows dist-windows vars clean
+.PHONY: debug asan release run test test-release test-asan doctor check compdb dist dist-src windows dist-windows vars clean
 
 # Prints the platform-dependent flags. Used by CI and when debugging a
 # cross build; harmless otherwise.

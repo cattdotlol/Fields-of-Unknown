@@ -21,6 +21,20 @@ If you're sending a build to someone, note that Linux binaries don't move
 between distros — glibc only resolves forward. Send them the source, or
 have CI build it.
 
+## Development with coding agents
+
+Start with [AGENTS.md](AGENTS.md), the [architecture map](docs/architecture.md),
+and the [development workflow](docs/development.md).
+
+```sh
+python3 tools/dev.py doctor          # report prerequisites
+python3 tools/dev.py check           # strict build + debug/release tests
+python3 tools/dev.py compdb          # compiler commands for editor tooling
+```
+
+Checks produce JSON results and logs under `build/checks/`. Use
+`make test TEST_SUITE=physics` for focused iteration.
+
 ## Controls
 
 | | |

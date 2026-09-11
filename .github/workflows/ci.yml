@@ -48,21 +48,16 @@ jobs:
           make -C vendor/raylib/src PLATFORM=PLATFORM_DESKTOP \
             RAYLIB_LIBTYPE=STATIC -j"$(nproc)"
 
-      # The build is warning-free today; this keeps it that way.
-      - name: Build
-        run: |
-          set -o pipefail
-          make release 2>&1 | tee build.log
-          if grep -q "warning:" build.log; then
-            echo "--- warnings ---"
-            grep -n -A2 "warning:" build.log
-            echo "::error::the build produced warnings"
-            exit 1
-          fi
+      - name: Verify build and tests
+        run: python3 tools/dev.py check --sanitizers
 
-      # Nothing in the suite opens a window, so it runs headless as-is.
-      - name: Test
-        run: make test
+      - name: Upload validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checks-linux
+          path: build/checks/
+          if-no-files-found: warn
 
       - name: Package
         run: |
@@ -102,21 +97,17 @@ jobs:
           make -C vendor/raylib/src PLATFORM=PLATFORM_DESKTOP \
             RAYLIB_LIBTYPE=STATIC -j"$(sysctl -n hw.ncpu)"
 
-      # No SYS_LIBS override: this exercises the Makefile's own Darwin
-      # detection, which is the thing that would break unnoticed.
-      - name: Build
-        run: |
-          set -o pipefail
-          make release 2>&1 | tee build.log
-          if grep -q "warning:" build.log; then
-            echo "--- warnings ---"
-            grep -n -A2 "warning:" build.log
-            echo "::error::the build produced warnings"
-            exit 1
-          fi
+      # Uses the Makefile's native macOS framework flags.
+      - name: Verify build and tests
+        run: python3 tools/dev.py check
 
-      - name: Test
-        run: make test
+      - name: Upload validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checks-macos
+          path: build/checks/
+          if-no-files-found: warn
 
       - name: Package
         run: |
@@ -175,6 +166,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: fields-of-unknown-*
 
       - name: Attach builds to the tag
         env:
